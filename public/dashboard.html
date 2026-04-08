@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="VenueAI Admin Dashboard - Real-time venue management, crowd monitoring, and staff coordination.">
+  <title>VenueAI — Command Center</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+<div id="dashboard" style="display:flex;height:100vh;overflow:hidden;">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">🏟️</div>
+      <div class="brand-text">
+        <h1>VenueAI</h1>
+        <span>Command Center</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-panel="overview" onclick="switchPanel('overview')">
+        <span class="nav-icon">📊</span><span>Overview</span>
+      </button>
+      <button class="nav-item" data-panel="crowd" onclick="switchPanel('crowd')">
+        <span class="nav-icon">👥</span><span>Crowd Monitor</span>
+      </button>
+      <button class="nav-item" data-panel="orders" onclick="switchPanel('orders')">
+        <span class="nav-icon">🍔</span><span>Food Orders</span>
+      </button>
+      <button class="nav-item" data-panel="staff" onclick="switchPanel('staff')">
+        <span class="nav-icon">👷</span><span>Staff Dispatch</span>
+      </button>
+      <button class="nav-item" data-panel="alerts" onclick="switchPanel('alerts')">
+        <span class="nav-icon">🔔</span><span>Alert Center</span>
+        <span class="nav-badge" id="alertBadge">0</span>
+      </button>
+      <button class="nav-item" data-panel="cameras" onclick="switchPanel('cameras')">
+        <span class="nav-icon">📷</span><span>Live CCTV</span>
+      </button>
+      <button class="nav-item" data-panel="match" onclick="switchPanel('match')">
+        <span class="nav-icon">⚽</span><span>Match Control</span>
+      </button>
+      <button class="nav-item" data-panel="settings" onclick="switchPanel('settings')">
+        <span class="nav-icon">⚙️</span><span>Venue Settings</span>
+      </button>
+      <button class="nav-item" data-panel="menu" onclick="switchPanel('menu')">
+        <span class="nav-icon">🍽️</span><span>Menu Management</span>
+      </button>
+      <button class="nav-item" data-panel="scanner" onclick="switchPanel('scanner')">
+        <span class="nav-icon">📷</span><span>QR Scanner</span>
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="server-status">
+        <span class="status-dot"></span>
+        <span>AI System Online</span>
+      </div>
+      <a href="/" class="sidebar-link">📱 Attendee App →</a>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN CONTENT ═══ -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h2 id="panelTitle">Overview</h2>
+        <span class="topbar-subtitle" id="panelSubtitle">Real-time venue monitoring</span>
+      </div>
+      <div class="topbar-right">
+        <div class="match-mini">
+          <span id="miniHome">🔵 MU</span>
+          <span class="mini-score" id="miniScore">0 : 0</span>
+          <span id="miniAway">CS 🔴</span>
+          <span class="mini-status" id="miniStatus">PRE-MATCH</span>
+        </div>
+        <div class="topbar-time" id="topbarTime">--:-- --</div>
+      </div>
+    </header>
+
+    <!-- Panels -->
+    <div class="panels-container">
+
+      <!-- ══ OVERVIEW PANEL ══ -->
+      <section id="panel-overview" class="panel active">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">👥</div>
+            <div class="kpi-data">
+              <span class="kpi-value" id="kpiAttendance">0</span>
+              <span class="kpi-label">Live Attendance</span>
+            </div>
+            <div class="kpi-trend" id="kpiAttendancePct">0% capacity</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background:linear-gradient(135deg,#f59e0b,#ef4444);">⏱️</div>
+            <div class="kpi-data">
+              <span class="kpi-value" id="kpiWaitTime">0</span>
+              <span class="kpi-label">Avg Wait (min)</span>
+            </div>
+            <div class="kpi-trend good" id="kpiWaitTrend">Live</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background:linear-gradient(135deg,#10b981,#059669);">📦</div>
+            <div class="kpi-data">
+              <span class="kpi-value" id="kpiOrders">0</span>
+              <span class="kpi-label">Total Orders</span>
+            </div>
+            <div class="kpi-trend" id="kpiOrdersTrend">Live</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background:linear-gradient(135deg,#ec4899,#f43f5e);">💰</div>
+            <div class="kpi-data">
+              <span class="kpi-value" id="kpiRevenue">₹0</span>
+              <span class="kpi-label">Revenue</span>
+            </div>
+            <div class="kpi-trend" id="kpiRevenueTrend">Live</div>
+          </div>
+        </div>
+
+        <div class="charts-row">
+          <div class="chart-card">
+            <h3>📈 Crowd Density Over Time</h3>
+            <div class="chart-container">
+              <canvas id="crowdChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <h3>🏟️ Zone Utilization</h3>
+            <div class="zone-bars" id="zoneBars">
+              <div style="color:var(--text-muted);font-size:0.85rem">Loading zones...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-row">
+          <div class="card">
+            <h3>🚪 Gate Flow</h3>
+            <div class="gate-flow-list" id="gateFlowList">
+              <div style="color:var(--text-muted);font-size:0.85rem">Connecting...</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>🔔 Recent Alerts</h3>
+            <div class="alert-feed" id="alertFeedOverview"></div>
+          </div>
+          <div class="card">
+            <h3>🍟 Concession Status</h3>
+            <div class="concession-list" id="concessionList">
+              <div style="color:var(--text-muted);font-size:0.85rem">Connecting...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ CROWD MONITOR PANEL ══ -->
+      <section id="panel-crowd" class="panel">
+        <div class="crowd-header">
+          <div class="crowd-stat-big">
+            <span class="crowd-number" id="crowdTotal">0</span>
+            <span class="crowd-label"> / 60,000 capacity</span>
+          </div>
+          <div class="crowd-utilization">
+            <div class="utilization-ring">
+              <svg viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
+                <circle cx="60" cy="60" r="52" fill="none" stroke="url(#ringGrad)" stroke-width="8"
+                  stroke-dasharray="327" stroke-dashoffset="327" id="ringProgress"
+                  stroke-linecap="round" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset 0.6s ease"/>
+                <defs>
+                  <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#4493f8"/>
+                    <stop offset="100%" stop-color="#ec4899"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+              <span class="ring-text" id="ringText">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="crowd-zones-detail" id="crowdZonesDetail">
+          <!-- Populated by JS -->
+        </div>
+
+        <div class="crowd-heatmap">
+          <h3>🌡️ Zone Heatmap</h3>
+          <div class="heatmap-grid" id="heatmapGrid">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ FOOD ORDERS PANEL ══ -->
+      <section id="panel-orders" class="panel">
+        <div class="orders-header">
+          <div class="orders-stats">
+            <div class="order-stat">
+              <span class="order-stat-value" style="color:var(--warning)" id="ordersPending">0</span>
+              <span class="order-stat-label">🍳 Preparing</span>
+            </div>
+            <div class="order-stat">
+              <span class="order-stat-value" style="color:var(--success)" id="ordersReady">0</span>
+              <span class="order-stat-label">✅ Ready</span>
+            </div>
+            <div class="order-stat">
+              <span class="order-stat-value" style="color:var(--accent)" id="ordersDelivered">0</span>
+              <span class="order-stat-label">📦 Delivered</span>
+            </div>
+          </div>
+        </div>
+        <div class="orders-grid" id="ordersGrid">
+          <div class="empty-state">
+            <span>📋</span>
+            <p>No orders yet. Attendees haven't ordered yet.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ STAFF DISPATCH PANEL ══ -->
+      <section id="panel-staff" class="panel">
+        <div class="staff-controls">
+          <h3>Staff Management</h3>
+          <div class="staff-summary">
+            <div class="staff-stat">
+              <span class="staff-stat-value" id="staffAvail">0</span>
+              <span>✅ Available</span>
+            </div>
+            <div class="staff-stat">
+              <span class="staff-stat-value" style="color:var(--warning)" id="staffDeployed">0</span>
+              <span>🟡 Deployed</span>
+            </div>
+          </div>
+        </div>
+        <div class="staff-filters">
+          <button class="staff-filter active" onclick="filterStaff('all')">All Staff</button>
+          <button class="staff-filter" onclick="filterStaff('security')">🛡️ Security</button>
+          <button class="staff-filter" onclick="filterStaff('service')">🤝 Service</button>
+          <button class="staff-filter" onclick="filterStaff('medical')">🏥 Medical</button>
+        </div>
+        <div class="staff-grid" id="staffGrid">
+          <div class="empty-state"><span>👷</span><p>Loading staff...</p></div>
+        </div>
+      </section>
+
+      <!-- ══ ALERTS PANEL ══ -->
+      <section id="panel-alerts" class="panel">
+        <div class="alerts-controls">
+          <h3>Alert Center</h3>
+          <div class="alerts-filter-row">
+            <button class="alert-filter active" onclick="filterAlerts('all')">All</button>
+            <button class="alert-filter" onclick="filterAlerts('danger')">🔴 Critical</button>
+            <button class="alert-filter" onclick="filterAlerts('warning')">🟡 Warning</button>
+            <button class="alert-filter" onclick="filterAlerts('info')">🔵 Info</button>
+            <button class="alert-filter" onclick="filterAlerts('success')">🟢 Match</button>
+          </div>
+        </div>
+        <div class="alerts-full-list" id="alertsFullList">
+          <div class="empty-state"><span>🔔</span><p>No alerts yet</p></div>
+        </div>
+      </section>
+
+      <!-- ══ CAMERAS PANEL ══ -->
+      <section id="panel-cameras" class="panel">
+        <div class="card" style="margin-bottom:20px;">
+          <h3>📷 Venue CCTV — Live Crowd Monitoring</h3>
+          <p style="color:var(--text-muted);margin-bottom:20px;font-size:0.85rem">AI-powered real-time crowd density detection across all camera zones. Red overlays indicate high-density areas.</p>
+          <div class="camera-grid">
+            <div class="camera-card">
+              <div class="camera-feed">
+                <video autoplay loop muted playsinline>
+                  <source src="https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4">
+                </video>
+                <div class="camera-overlay"><div class="rec-dot"></div> REC LIVE</div>
+              </div>
+              <div class="camera-meta">
+                <span class="camera-title">📌 Gate A Entrance</span>
+                <span class="camera-status cs-low">🟢 Low Density</span>
+              </div>
+              <div class="camera-ai-info">AI Detection: 42 persons/frame — Queue ~8 min</div>
+            </div>
+
+            <div class="camera-card">
+              <div class="camera-feed">
+                <video autoplay loop muted playsinline>
+                  <source src="https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" type="video/mp4">
+                </video>
+                <div class="camera-overlay"><div class="rec-dot"></div> REC LIVE</div>
+              </div>
+              <div class="camera-meta">
+                <span class="camera-title">📌 North Concourse</span>
+                <span class="camera-status cs-med">🟡 Medium Density</span>
+              </div>
+              <div class="camera-ai-info">AI Detection: 115 persons/frame — Queue ~12 min</div>
+            </div>
+
+            <div class="camera-card">
+              <div class="camera-feed">
+                <video autoplay loop muted playsinline>
+                  <source src="https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4" type="video/mp4">
+                </video>
+                <div class="camera-overlay"><div class="rec-dot"></div> REC LIVE</div>
+              </div>
+              <div class="camera-meta">
+                <span class="camera-title">📌 South Stand Entrance</span>
+                <span class="camera-status cs-low">🟢 Low Density</span>
+              </div>
+              <div class="camera-ai-info">AI Detection: 28 persons/frame — Queue ~4 min</div>
+            </div>
+
+            <div class="camera-card">
+              <div class="camera-feed">
+                <video autoplay loop muted playsinline>
+                  <source src="https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4" type="video/mp4">
+                </video>
+                <div class="camera-overlay"><div class="rec-dot"></div> REC LIVE</div>
+              </div>
+              <div class="camera-meta">
+                <span class="camera-title">📌 East Concessions</span>
+                <span class="camera-status cs-high">🔴 HIGH Density</span>
+              </div>
+              <div class="camera-ai-info">⚠️ AI Alert: 243 persons/frame — Dispatch recommended!</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ MATCH CONTROL PANEL ══ -->
+      <section id="panel-match" class="panel">
+        <div class="match-control-card">
+          <h3>⚽ Match Control</h3>
+          <div class="match-display">
+            <div class="match-display-team">
+              <span class="match-display-icon">🔵</span>
+              <span class="match-display-name">Metro United</span>
+              <span class="match-display-score" id="ctrlHomeScore">0</span>
+            </div>
+            <div class="match-display-vs">
+              <span class="match-display-minute" id="ctrlMinute">—</span>
+              <span class="match-display-status" id="ctrlStatus">PRE-MATCH</span>
+            </div>
+            <div class="match-display-team">
+              <span class="match-display-icon">🔴</span>
+              <span class="match-display-name">City Strikers</span>
+              <span class="match-display-score" id="ctrlAwayScore">0</span>
+            </div>
+          </div>
+          <div class="match-actions">
+            <button class="btn btn-success" onclick="matchControl('start')">▶️ Kick Off</button>
+            <button class="btn btn-warning" onclick="matchControl('halftime')">⏸️ Halftime</button>
+            <button class="btn btn-primary" onclick="matchControl('second_half')">▶️ 2nd Half</button>
+            <button class="btn btn-danger" onclick="matchControl('end')">⏹️ Full Time</button>
+            <button class="btn btn-secondary" onclick="matchControl('reset')">🔄 Reset Match</button>
+          </div>
+        </div>
+
+        <div class="match-events-card">
+          <h3>📋 Match Event Timeline</h3>
+          <div class="match-events-list" id="matchEventsList">
+            <div class="empty-state"><p>⚽ No match events yet. Start the match to begin.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ SETTINGS PANEL ══ -->
+      <section id="panel-settings" class="panel">
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h3>🏟️ Stadium Configuration</h3>
+            <div class="form-group">
+              <label>Total Venue Capacity</label>
+              <input type="number" id="settingCapacity" class="form-input" value="60000" min="5000" max="200000">
+              <div class="form-hint">Changing this will proportionally rescale all zone densities and routing heuristics.</div>
+            </div>
+            <button class="btn btn-primary" onclick="updateVenueSettings()" style="margin-top:8px">Apply Capacity Change</button>
+          </div>
+
+          <div class="settings-card">
+            <h3>📢 Broadcast Alert</h3>
+            <div class="form-group">
+              <label>Alert Type</label>
+              <select id="alertType" class="form-input">
+                <option value="info">🔵 Info</option>
+                <option value="warning">🟡 Warning</option>
+                <option value="danger">🔴 Critical</option>
+                <option value="success">🟢 Positive</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Message</label>
+              <input type="text" id="alertMessage" class="form-input" placeholder="Enter alert message to broadcast...">
+            </div>
+            <button class="btn btn-warning" onclick="createManualAlert()">📢 Broadcast to All</button>
+          </div>
+        </div>
+
+        <div class="ai-status-card" style="margin-top:20px;">
+          <h3>🤖 AI System Status</h3>
+          <div class="ai-status-row">
+            <span class="ai-status-label">Crowd Density AI</span>
+            <span class="ai-status-val">✅ Active (500ms tick)</span>
+          </div>
+          <div class="ai-status-row">
+            <span class="ai-status-label">Auto Staff Dispatcher</span>
+            <span class="ai-status-val">✅ Active (threshold: 85%)</span>
+          </div>
+          <div class="ai-status-row">
+            <span class="ai-status-label">Gate Flow Optimizer</span>
+            <span class="ai-status-val">✅ Active</span>
+          </div>
+          <div class="ai-status-row">
+            <span class="ai-status-label">Food Queue Predictor</span>
+            <span class="ai-status-val">✅ Active</span>
+          </div>
+          <div class="ai-status-row">
+            <span class="ai-status-label">Match Event Detector</span>
+            <span class="ai-status-val">✅ Active</span>
+          </div>
+          <div class="ai-status-row">
+            <span class="ai-status-label">WebSocket Clients</span>
+            <span class="ai-status-val" id="wsClientCount">—</span>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ══ MENU MANAGEMENT PANEL ══ -->
+      <section id="panel-menu" class="panel">
+        <div class="settings-grid">
+          <div class="settings-card">
+            <h3>➕ Add New Menu Item</h3>
+            <div class="form-group">
+              <label>Item Name</label>
+              <input type="text" id="menuItemName" class="form-input" placeholder="e.g. Samosa Platter">
+            </div>
+            <div class="form-group">
+              <label>Price (₹)</label>
+              <input type="number" id="menuItemPrice" class="form-input" placeholder="e.g. 120" min="1">
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select id="menuItemCategory" class="form-input">
+                <option value="food">🍔 Food</option>
+                <option value="beverage">🥤 Beverage</option>
+                <option value="dessert">🍦 Dessert</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Prep Time (min)</label>
+              <input type="number" id="menuItemPrepTime" class="form-input" placeholder="e.g. 5" min="1" max="30">
+            </div>
+            <div class="form-group">
+              <label>Emoji Icon</label>
+              <input type="text" id="menuItemEmoji" class="form-input" placeholder="e.g. 🍱 (optional)">
+            </div>
+            <button class="btn btn-success" onclick="addMenuItem()" style="margin-top:8px;width:100%">➕ Add to Menu</button>
+          </div>
+
+          <div class="settings-card" style="grid-column:1/-1">
+            <h3>📋 Current Menu Items</h3>
+            <div id="menuManagementList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px;">
+              <div style="color:var(--text-muted)">Loading menu...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ QR SCANNER PANEL ══ -->
+      <section id="panel-scanner" class="panel">
+        <div style="max-width:600px;margin:0 auto;">
+          <div class="settings-card">
+            <h3>📷 Order Pickup Scanner</h3>
+            <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:20px">
+              Scan the attendee's pickup QR code to confirm order collection and update status to Delivered.
+            </p>
+
+            <!-- Camera scanner -->
+            <div style="background:#000;border-radius:12px;overflow:hidden;margin-bottom:16px;position:relative;min-height:200px;">
+              <video id="scannerVideo" autoplay playsinline style="width:100%;max-height:280px;object-fit:cover;display:none"></video>
+              <canvas id="scannerCanvas" style="display:none"></canvas>
+              <div id="scannerPlaceholder" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:#6b7280;gap:10px;">
+                <span style="font-size:3rem">📷</span>
+                <span>Camera not started</span>
+              </div>
+              <div id="scannerOverlay" style="display:none;position:absolute;inset:0;border:3px solid #6366f1;border-radius:12px;pointer-events:none;">
+                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:160px;height:160px;border:2px solid #6366f1;border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,0.3);"></div>
+                <div style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.8);padding:4px 10px;border-radius:20px;font-size:0.75rem;color:#fff;font-family:monospace"><span style="color:#10b981">●</span> Scanning...</div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-bottom:20px;">
+              <button class="btn btn-primary" id="startScanBtn" onclick="startScanner()" style="flex:1">📷 Start Camera</button>
+              <button class="btn btn-secondary" onclick="stopScanner()" style="flex:1">⏹️ Stop</button>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;color:#6b7280;">
+              <div style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></div>
+              <span style="font-size:0.8rem">OR ENTER MANUALLY</span>
+              <div style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></div>
+            </div>
+
+            <div class="form-group">
+              <label>QR Code / Pickup Code</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="manualQrInput" class="form-input" placeholder="e.g. PICKUP-ORD-1001-ABC123" style="flex:1">
+                <button class="btn btn-success" onclick="scanManualQR()">✓ Confirm</button>
+              </div>
+            </div>
+
+            <div id="scanResult" style="display:none;margin-top:16px;padding:14px;border-radius:12px;"></div>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- .panels-container -->
+
+  </main>
+</div><!-- #dashboard -->
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/js/dashboard.js"></script>
+</body>
+</html>

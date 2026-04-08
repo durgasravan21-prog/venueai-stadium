@@ -1,0 +1,178 @@
+:root {
+  --bg-primary: #f0f4f8;
+  --bg-secondary: #e2e8f0;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --glass: rgba(255, 255, 255, 0.95);
+  --glass-border: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --accent: #0284c7;
+  --accent-glow: rgba(2, 132, 199, 0.15);
+  --accent-2: #0369a1;
+  --accent-3: #16a34a;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #2563eb;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 4px;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --transition: all 0.2s ease-in-out;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* HERO */
+.hero { position: relative; min-height: 60vh; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; background: white; border-bottom: 1px solid var(--glass-border); }
+.hero-content { z-index: 2; padding: 2rem; }
+.hero h1 { font-size: 2.5rem; font-weight: 800; color: var(--text-primary); }
+.gradient-text { color: var(--accent); }
+.hero-subtitle { font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 2rem; }
+
+/* MATCH CARD */
+.match-card { background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow); }
+.match-teams { display: flex; align-items: center; justify-content: space-between; }
+.match-score { font-size: 2.5rem; font-weight: 800; color: var(--text-primary); }
+.match-status { color: var(--accent); font-weight: 700; margin-top: 10px; font-size: 0.9rem;}
+
+/* BUTTONS */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border: none; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; transition: var(--transition); font-size: 0.95rem; }
+.btn-primary { background: var(--accent); color: white; box-shadow: 0 2px 4px rgba(2, 132, 199, 0.3); }
+.btn-primary:hover { background: var(--accent-2); }
+.btn-secondary { background: var(--bg-secondary); border: 1px solid var(--glass-border); color: var(--text-primary); }
+.btn-secondary:hover { background: #cbd5e1; }
+
+/* TABS */
+.tab-nav { display: flex; background: var(--bg-card); padding: 10px; border-bottom: 1px solid var(--glass-border); position: sticky; top: 0; z-index: 100; justify-content: space-around; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.tab-btn { background: none; border: none; color: var(--text-secondary); padding: 10px; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 600; }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; padding: 20px 10px; max-width: 800px; margin: 0 auto; }
+.tab-panel.active { display: block; }
+
+/* VENUE MAP */
+.venue-map { background: var(--bg-card); padding: 20px; border-radius: var(--radius); text-align: center; border: 1px solid var(--glass-border); box-shadow: var(--shadow); }
+.zone-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 15px; }
+.zone-card { background: var(--bg-card); padding: 15px; border-radius: var(--radius-sm); border: 1px solid var(--glass-border); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.zone-card-name { font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; }
+.zone-card-count { font-size: 1.5rem; font-weight: bold; color: var(--text-primary); margin: 5px 0; }
+.zone-card-bar { height: 6px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden; }
+.zone-card-fill { height: 100%; background: var(--accent); }
+
+/* GRID SYSTEMS (Slots, Menu) */
+.slots-grid, .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-top: 15px; }
+.slot-card, .menu-item { background: var(--bg-card); padding: 15px; border-radius: var(--radius-sm); border: 1px solid var(--glass-border); cursor: pointer; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: var(--transition); }
+.slot-card:hover, .menu-item:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
+.slot-card.full { opacity: 0.5; pointer-events: none; background: var(--bg-secondary); }
+.slot-time { font-weight: 700; color: var(--text-primary); font-size: 1.1rem; }
+.slot-avail { font-size: 0.8rem; color: var(--text-secondary); margin-top: 5px;}
+.menu-item-emoji { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+.menu-item-name { font-weight: 600; color: var(--text-primary); font-size: 0.95rem; }
+.menu-item-price { color: var(--accent); font-weight: 700; margin: 5px 0; }
+
+/* CART */
+.cart-container { position: fixed; bottom: 0; width: 100%; background: var(--bg-card); border-top: 1px solid var(--glass-border); padding: 15px; display: none; box-shadow: 0 -4px 10px rgba(0,0,0,0.05); z-index: 200; }
+.cart-header { display: flex; justify-content: space-between; font-weight: bold; cursor: pointer; color: var(--text-primary); font-size: 1.1rem; }
+.cart-body { display: none; margin-top: 15px; }
+.cart-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--bg-secondary); color: var(--text-primary); }
+
+/* ALERTS — compact one-line rows */
+.alert-item-mini {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; margin-bottom: 6px;
+  background: var(--bg-card); border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  font-size: 0.78rem; color: var(--text-secondary);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.alert-msg-text { flex: 1; color: var(--text-primary); font-weight: 500; }
+.alert-time-text { color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; }
+/* coloured left-dot per severity */
+.alert-dot-danger  { width:7px;height:7px;border-radius:50%;background:#dc2626;flex-shrink:0; }
+.alert-dot-warning { width:7px;height:7px;border-radius:50%;background:#d97706;flex-shrink:0; }
+.alert-dot-success { width:7px;height:7px;border-radius:50%;background:#16a34a;flex-shrink:0; }
+.alert-dot-info    { width:7px;height:7px;border-radius:50%;background:#2563eb;flex-shrink:0; }
+
+/* MISC */
+.section-title { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.4rem; }
+.section-desc  { color: var(--text-secondary); margin-bottom: 1rem; font-size:0.9rem; }
+.empty-state   { text-align:center; padding:2rem; color: var(--text-muted); }
+.empty-icon    { font-size:2.5rem; display:block; margin-bottom:0.5rem; }
+
+/* old .toast CSS removed — pill is now fully JS-driven */
+
+/* Ticket display */
+.ticket-display { margin-top: 20px; }
+.ticket-card { background: var(--bg-card); border: 2px dashed var(--accent); border-radius: var(--radius); padding: 24px; max-width: 380px; margin: 0 auto; }
+.ticket-header { display:flex; align-items:center; gap:10px; font-weight:700; font-size:1.1rem; margin-bottom:16px; color:var(--accent); }
+.ticket-icon { font-size:1.5rem; }
+.ticket-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--bg-secondary); }
+.ticket-label { color:var(--text-secondary); font-size:0.85rem; }
+.ticket-value { font-weight:700; color:var(--text-primary); }
+.ticket-footer { margin-top:14px; text-align:center; font-size:0.78rem; color:var(--text-muted); }
+
+/* Social proof */
+.social-proof { display:flex; align-items:center; gap:8px; background:rgba(2,132,199,0.08); border:1px solid rgba(2,132,199,0.2); border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:0.85rem; color:var(--text-secondary); }
+.social-proof-icon { font-size:1.1rem; }
+
+/* Live bar */
+.live-bar { background:var(--bg-card); border-bottom:1px solid var(--glass-border); padding:8px 16px; }
+.live-bar-inner { display:flex; gap:20px; justify-content:center; flex-wrap:wrap; }
+.live-stat { display:flex; align-items:center; gap:6px; font-size:0.85rem; color:var(--text-secondary); }
+.live-dot { width:8px; height:8px; border-radius:50%; background:#16a34a; animation:pulse 1.5s infinite; display:inline-block; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* Seat input */
+.cart-seat { margin: 12px 0; }
+.cart-seat label { font-size:0.8rem; color:var(--text-secondary); display:block; margin-bottom:4px; }
+.cart-seat input { width:100%; padding:10px 12px; border:1px solid var(--glass-border); border-radius:8px; font-size:0.9rem; background:var(--bg-primary); color:var(--text-primary); }
+.btn-full { width:100%; margin-top:10px; }
+
+/* orders-list */
+.orders-list { display:flex; flex-direction:column; gap:14px; }
+.order-card { background:var(--bg-card); border:1px solid var(--glass-border); border-radius:var(--radius); padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+
+/* Hero badge */
+.hero-badge { display:inline-block; padding:4px 12px; background:rgba(2,132,199,0.1); border:1px solid rgba(2,132,199,0.3); border-radius:20px; font-size:0.78rem; font-weight:700; color:var(--accent); margin-bottom:12px; letter-spacing:0.06em; }
+.hero-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:8px; }
+.btn-glow { box-shadow: 0 0 16px rgba(2,132,199,0.3); }
+
+/* Scroll indicator */
+.scroll-indicator { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); }
+.scroll-arrow { width:24px;height:24px;border-right:2px solid var(--accent);border-bottom:2px solid var(--accent);transform:rotate(45deg);animation:bounce 1.5s infinite; }
+@keyframes bounce { 0%,100%{transform:rotate(45deg) translateY(0)} 50%{transform:rotate(45deg) translateY(5px)} }
+
+/* Stadium SVG zone paths */
+.zone-path { fill:rgba(2,132,199,0.08); cursor:pointer; transition:fill 0.3s; }
+.zone-path.hot  { fill:rgba(239,68,68,0.18); }
+.zone-path.warm { fill:rgba(245,158,11,0.18); }
+.zone-path.cool { fill:rgba(16,185,129,0.12); }
+.zone-label { font-size:10px; fill:rgba(0,0,0,0.5); font-family:Inter,sans-serif; font-weight:600; }
+.gate-dot  { fill:#0284c7; cursor:pointer; }
+.gate-dot.busy { fill:#dc2626; }
+.gate-label { font-size:9px; fill:#fff; font-family:Inter,sans-serif; font-weight:700; }
+
+/* Slot bar */
+.slot-bar { height:4px; background:var(--bg-secondary); border-radius:2px; overflow:hidden; margin-top:6px; }
+.slot-fill { height:100%; background:var(--accent); }
+
+/* Menu add button */
+.menu-item-add { display:flex; align-items:center; justify-content:center; width:28px;height:28px; background:var(--accent); color:#fff; border-radius:50%; font-size:1.1rem; margin:6px auto 0; font-weight:700; }
+
+/* food cat btn */
+.food-cat-btn { padding:6px 14px; border:1px solid var(--glass-border); border-radius:20px; background:var(--bg-card); color:var(--text-secondary); cursor:pointer; font-size:0.83rem; font-weight:600; transition:var(--transition); }
+.food-cat-btn.active, .food-cat-btn:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+
