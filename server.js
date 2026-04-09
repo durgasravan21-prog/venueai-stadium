@@ -8,6 +8,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
+const { initDB, syncStaff, syncOrder } = require('./db');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -140,6 +141,9 @@ for (let i = 1; i <= 30; i++) {
   });
 }
 
+// Initialize Database persistence
+initDB(staff, orders);
+
 // Analytics accumulator
 let analytics = {
   totalEntries: 0,
@@ -238,6 +242,7 @@ function autoDispatchStaff() {
         idleStaff.zone = zone.id;
         idleStaff.status = 'dispatched';
         idleStaff.currentTask = 'Autonomous crowd control triggered by AI density threshold';
+        syncStaff(idleStaff);
         
         addAlert('warning', `🤖 AI SYSTEM: Autonomously dispatched ${idleStaff.name} to ${zone.name} to manage critical density.`, 'system');
         io.emit('staff_update', idleStaff);
@@ -330,6 +335,7 @@ function processOrders() {
       order.remainingTime = Math.max(0, order.remainingTime - 1);
       if (order.remainingTime <= 0) {
         order.status = 'ready';
+        syncOrder(order);
         io.emit('order_update', order);
       }
     }
@@ -550,6 +556,7 @@ app.post('/api/food/order', (req, res) => {
   };
 
   orders.push(order);
+  syncOrder(order);
   concession.orders_pending++;
   analytics.totalOrders++;
   analytics.totalRevenue += total;
@@ -572,6 +579,7 @@ app.post('/api/food/orders/:id/complete', (req, res) => {
   const order = orders.find(o => o.id === req.params.id);
   if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
   order.status = 'delivered';
+  syncOrder(order);
   const concession = VENUE.concessions.find(c => c.id === order.concessionId);
   if (concession) concession.orders_pending = Math.max(0, concession.orders_pending - 1);
   io.emit('order_update', order);
@@ -623,6 +631,7 @@ app.post('/api/staff/add', (req, res) => {
     name, role, zone: zone || 'unassigned', status: 'available', currentTask: null
   };
   staff.push(newStaff);
+  syncStaff(newStaff);
   
   io.emit('staff_update', newStaff); // Update all clients
   res.json({ success: true, data: newStaff });
@@ -632,7 +641,8 @@ app.delete('/api/staff/:id', (req, res) => {
   const idx = staff.findIndex(st => st.id === req.params.id);
   if (idx < 0) return res.status(404).json({ success: false, error: 'Staff not found' });
   
-  staff.splice(idx, 1);
+  const removedStaff = staff.splice(idx, 1)[0];
+  if(removedStaff) syncStaff(removedStaff, true);
   io.emit('staff_removed', req.params.id);
   res.json({ success: true });
 });
@@ -644,6 +654,7 @@ app.post('/api/staff/:id/dispatch', (req, res) => {
   s.zone = zone || s.zone;
   s.status = 'dispatched';
   s.currentTask = task || 'General assistance';
+  syncStaff(s);
   addAlert('info', `${s.name} dispatched to ${zone} for: ${s.currentTask}`, 'system');
   io.emit('staff_update', s);
   res.json({ success: true, data: s });
@@ -654,6 +665,7 @@ app.post('/api/staff/:id/release', (req, res) => {
   if (!s) return res.status(404).json({ success: false, error: 'Staff not found' });
   s.status = 'available';
   s.currentTask = null;
+  syncStaff(s);
   io.emit('staff_update', s);
   res.json({ success: true, data: s });
 });
@@ -816,6 +828,7 @@ app.post('/api/payment/verify', (req, res) => {
   order.qrCode = `PICKUP-${order.id}-${uuidv4().split('-')[0].toUpperCase()}`;
 
   orders.push(order);
+  syncOrder(order);
   concession.orders_pending++;
   analytics.totalOrders++;
   analytics.totalRevenue += order.total;
@@ -873,6 +886,7 @@ app.post('/api/orders/scan-pickup', (req, res) => {
   if (order.status === 'preparing') return res.status(400).json({ success: false, error: 'Order still being prepared', data: order });
 
   order.status = 'delivered';
+  syncOrder(order);
   const concession = VENUE.concessions.find(c => c.id === order.concessionId);
   if (concession) concession.orders_pending = Math.max(0, concession.orders_pending - 1);
   io.emit('order_update', order);
