@@ -32,6 +32,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+const rateLimit = require('express-rate-limit');
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10000, // Limit each IP to 10000 requests per `window`
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
+
 // ============================================================
 // DATA MODELS & SIMULATION ENGINE
 // ============================================================

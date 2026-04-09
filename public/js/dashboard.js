@@ -27,6 +27,17 @@ let weatherData = null;
 
 // ─── Boot ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+      e.preventDefault();
+      // Auto trigger relevant actions based on the input id
+      const id = e.target.id;
+      if (id === 'manualQrInput') processManualQr();
+      if (id === 'teamAName' || id === 'teamBName') applyMatchConfig();
+      if (id === 'homeScoreInput' || id === 'awayScoreInput') pushManualScore();
+    }
+  });
+
   setInterval(updateTime, 1000);
   updateTime();
   initCharts();
