@@ -106,10 +106,30 @@ socket.on('venue_update', data => {
 
 socket.on('match_update', data => {
   const el = id => document.getElementById(id);
-  if (el('homeScore'))  el('homeScore').innerText  = data.homeScore;
-  if (el('awayScore'))  el('awayScore').innerText  = data.awayScore;
-  if (el('matchStatus')) el('matchStatus').innerText = data.status.replace('_', ' ').toUpperCase();
+  if (el('homeScore'))   el('homeScore').innerText  = data.homeScore;
+  if (el('awayScore'))   el('awayScore').innerText  = data.awayScore;
+  if (el('matchStatus')) el('matchStatus').innerText = data.status.replace(/_/g, ' ').toUpperCase();
   if (el('matchMinute')) el('matchMinute').innerText = data.minute > 0 ? data.minute + "'" : '';
+  // Update team names if admin changed them
+  const sportIcons = { cricket:'🏏', football:'⚽', basketball:'🏀', volleyball:'🏐', kabaddi:'🤸', hockey:'🏑' };
+  const icon = sportIcons[data.sport] || '🏆';
+  const heroTeams = document.querySelectorAll('.team-name');
+  if (heroTeams.length >= 2 && data.homeTeam && data.awayTeam) {
+    heroTeams[0].innerText = data.homeTeam;
+    heroTeams[1].innerText = data.awayTeam;
+  }
+  const teamIcons = document.querySelectorAll('.team-icon');
+  if (teamIcons.length >= 2 && data.sport) {
+    teamIcons[0].innerText = icon;
+    teamIcons[1].innerText = icon;
+  }
+  // Highlight goal events
+  if (data.events && data.events.length > 0) {
+    const last = data.events[data.events.length - 1];
+    if (last && last.type === 'goal') {
+      showToast(`${icon} GOAL! ${last.team} scores at ${last.minute}'`, 'success');
+    }
+  }
 });
 
 // Venue alerts → update the Venue tab list ONLY, never block the screen
