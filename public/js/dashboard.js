@@ -392,12 +392,32 @@ socket.on('venue_update', data => {
 socket.on('match_update', data => {
   matchState = { ...matchState, ...data };
   setText('topScore', `${data.homeScore} : ${data.awayScore}`);
-  setText('topStatus', data.minute > 0 ? `${data.minute}'` : data.status.replace('_', ' ').toUpperCase());
+  setText('topStatus', data.minute > 0 ? `${data.minute}'` : data.status.replace(/_/g, ' ').toUpperCase());
   setText('ctrlHomeScore', data.homeScore);
   setText('ctrlAwayScore', data.awayScore);
   setText('ctrlStatus', data.status.replace(/_/g, ' ').toUpperCase());
   setText('ctrlMinute', data.minute > 0 ? `${data.minute}'` : '—');
-  // Sync score inputs
+  
+  // FIXED: Update Team Names, Sport, and Stadium from backend broadcast
+  setText('ctrlTeamA', data.homeTeam);
+  setText('ctrlTeamB', data.awayTeam);
+  const icon = (typeof sportIcons !== 'undefined' && sportIcons[data.sport]) ? sportIcons[data.sport] : '⚽';
+  setText('topTeamHome', `${icon} ${data.homeTeam}`);
+  setText('topTeamAway', `${data.awayTeam} 🔴`);
+  setText('teamAIcon', icon);
+  
+  if (typeof currentSport !== 'undefined' && currentSport !== data.sport && typeof updateSport === 'function') {
+      const sportSelect = document.getElementById('sportSelect');
+      if(sportSelect) {
+         sportSelect.value = data.sport;
+         currentSport = data.sport;
+      }
+      const stadiumSelect = document.getElementById('stadiumSelect');
+      if(stadiumSelect && data.stadium) {
+         stadiumSelect.value = data.stadium;
+      }
+  }
+
   const hi = document.getElementById('homeScoreInput');
   const ai = document.getElementById('awayScoreInput');
   if (hi) hi.value = data.homeScore;

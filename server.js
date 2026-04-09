@@ -861,7 +861,7 @@ app.delete('/api/food/menu/:id', (req, res) => {
 app.post('/api/orders/scan-pickup', (req, res) => {
   const { qrCode } = req.body;
   if (!qrCode) return res.status(400).json({ success: false, error: 'qrCode required' });
-  const order = orders.find(o => o.qrCode === qrCode);
+  const order = orders.find(o => o.qrCode === qrCode || o.id === qrCode);
   if (!order) return res.status(404).json({ success: false, error: 'Order not found — invalid QR' });
   if (order.status === 'delivered') return res.json({ success: true, data: order, message: 'Already delivered' });
   if (order.status === 'preparing') return res.status(400).json({ success: false, error: 'Order still being prepared', data: order });
