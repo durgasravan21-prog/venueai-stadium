@@ -484,7 +484,7 @@ async function getRoute() {
       <div class="route-card best">
         <div class="route-best-badge">⭐ Best Route</div>
         <div class="route-steps">
-          ${r.steps.map((s,i) => `<div class="route-step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join('<div class="step-connector"></div>')}
+          ${r.path.map((s,i) => `<div class="route-step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join('<div class="step-connector"></div>')}
         </div>
         <div class="route-meta">
           <span>📏 ${r.distance}</span>
@@ -494,8 +494,8 @@ async function getRoute() {
       </div>
       ${alts.map(a => `
         <div class="route-card alt">
-          <div style="font-weight:800;margin-bottom:6px">${a.label}</div>
-          <div style="font-size:0.82rem;color:var(--text-secondary)">${a.steps.join(' → ')}</div>
+          <div style="font-weight:800;margin-bottom:6px">${a.label || 'Alternative Route'}</div>
+          <div style="font-size:0.82rem;color:var(--text-secondary)">${a.path.join(' → ')}</div>
           <div class="route-meta" style="margin-top:6px"><span>📏 ${a.distance}</span><span>⏱️ ${a.time}</span></div>
         </div>`).join('')}`;
 

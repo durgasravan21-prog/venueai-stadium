@@ -286,6 +286,19 @@ async function pushManualScore() {
   }
 }
 
+async function matchControl(action) {
+  try {
+    await fetch('/api/match/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    });
+    showToast(`✅ Match state updated: ${action.toUpperCase()}`);
+  } catch (e) {
+    showToast('Failed to change match state', 'danger');
+  }
+}
+
 // ─── Chart.js ──────────────────────────────────────────────────────────
 function initCharts() {
   const ctx = document.getElementById('crowdChart');
