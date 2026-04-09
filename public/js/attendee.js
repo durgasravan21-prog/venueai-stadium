@@ -256,7 +256,17 @@ function showTicket(d) {
   setText('ticketGate', 'Gate ' + d.gate);
   setText('ticketQRText', d.qrCode);
   const qr = document.getElementById('ticketQR');
-  if (qr) qr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(d.qrCode)}`;
+  if (qr) {
+    qr.innerHTML = '';
+    new QRCode(qr, {
+      text: d.qrCode,
+      width: 150,
+      height: 150,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  }
 }
 
 function resetBooking() {
@@ -422,7 +432,6 @@ function renderMyOrders() {
   list.innerHTML = [...myOrders].reverse().map(o => {
     const eta = o.remainingTime > 0 ? `⏱️ ${o.remainingTime}s` : '';
     const sc = o.status === 'ready' ? '#059669' : o.status === 'delivered' ? '#6366f1' : '#f59e0b';
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(o.qrCode || o.id)}`;
     return `
       <div class="order-card">
         <div class="order-top">
@@ -436,7 +445,7 @@ function renderMyOrders() {
           <span>${o.status === 'preparing' ? eta || '⏳ Preparing' : o.status === 'ready' ? '✅ Ready!' : '📦 Delivered'}</span>
         </div>
         <div class="order-qr-row">
-          <img src="${qrUrl}" alt="QR" class="order-qr-img">
+          <div id="qr-order-${o.id}" class="order-qr-wrap" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;"></div>
           <div>
             <div style="font-weight:800;font-size:0.9rem;">Pickup QR</div>
             <div style="font-size:0.72rem;font-family:monospace;color:var(--text-secondary)">${o.qrCode || o.id}</div>
@@ -445,6 +454,14 @@ function renderMyOrders() {
         </div>
       </div>`;
   }).join('');
+  
+  [...myOrders].reverse().forEach(o => {
+    const el = document.getElementById(`qr-order-${o.id}`);
+    if (el) {
+      el.innerHTML = '';
+      new QRCode(el, { text: o.qrCode || o.id, width: 80, height: 80, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
+    }
+  });
 }
 
 // ── Smart Navigation ─────────────────────────────────────────

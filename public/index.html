@@ -155,7 +155,7 @@
               <span class="ticket-value" id="ticketGate">—</span>
             </div>
             <div class="ticket-qr-block">
-              <img id="ticketQR" src="" alt="Entry QR Code" class="ticket-qr-img"/>
+              <div id="ticketQR" class="ticket-qr-wrap" style="display:inline-block;background:#fff;padding:10px;border-radius:12px;margin-bottom:8px;"></div>
               <span id="ticketQRText" class="ticket-qr-text"></span>
             </div>
           </div>
@@ -252,6 +252,7 @@
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="/js/attendee.js"></script>
 </body>
 </html>
