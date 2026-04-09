@@ -1,6 +1,7 @@
 /**
  * VenueAI — Staff Command Center Dashboard JS
- * Complete rewrite — fully functional with all panels
+ * Full rewrite: Stadium dropdown, Sport types, Manual score,
+ * AI weather + match intelligence, CCTV webcam, QR scanner
  */
 
 const socket = io();
@@ -11,10 +12,18 @@ let allStaff = [];
 let allOrders = [];
 let allAlerts = [];
 let allMatchEvents = [];
+let menuItems = [];
 let currentStaffFilter = 'all';
 let currentAlertFilter = 'all';
 let unreadAlerts = 0;
 let venueState = null;
+let matchState = { homeScore: 0, awayScore: 0, status: 'pre_match', minute: 0 };
+let currentSport = 'cricket';
+let currentStadium = 'metastadium';
+let scannerStream = null;
+let scannerInterval = null;
+let recentScansLog = [];
+let weatherData = null;
 
 // ─── Boot ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -24,12 +33,238 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchStaff();
   fetchOrders();
   loadInitialAlerts();
+  fetchMenuItems();
+  fetchWeather();
+  setInterval(fetchWeather, 60000);     // refresh weather every 60s
+  setInterval(runAIAnalysis, 3000);     // AI analysis every 3s
+  setInterval(updateMatchMinute, 60000); // match minute every 60s
 });
 
 // ─── Time ──────────────────────────────────────────────────────────────
 function updateTime() {
   const el = document.getElementById('topbarTime');
   if (el) el.innerText = new Date().toLocaleTimeString('en-IN', { hour12: true });
+}
+
+// ─── Match minute ticker ───────────────────────────────────────────────
+function updateMatchMinute() {
+  if (matchState.status === 'first_half' || matchState.status === 'second_half') {
+    matchState.minute = (matchState.minute || 0) + 1;
+    setText('ctrlMinute', `${matchState.minute}'`);
+  }
+}
+
+// ─── Weather Fetch (Open-Meteo, free, no key) ─────────────────────────
+async function fetchWeather() {
+  try {
+    // Default: Mumbai, India. Using Open-Meteo free API
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=19.0760&longitude=72.8777&current_weather=true&hourly=relativehumidity_2m,precipitation_probability&forecast_days=1');
+    const data = await res.json();
+    const cw = data.current_weather;
+    const temp = cw.temperature;
+    const wind = cw.windspeed;
+    const wcode = cw.weathercode;
+    const humidity = data.hourly.relativehumidity_2m[0] || '--';
+    const rainChance = data.hourly.precipitation_probability[0] || 0;
+
+    const { icon, desc } = decodeWMO(wcode);
+    weatherData = { temp, wind, humidity, rainChance, icon, desc };
+
+    // Top bar
+    setText('weatherIcon', icon);
+    setText('weatherTemp', `${temp}°C`);
+    setText('weatherDesc', desc);
+
+    // Weather panel
+    setText('weatherBigIcon', icon);
+    setText('weatherBigTemp', `${temp}°C`);
+    setText('weatherBigDesc', desc);
+    setText('weatherHumidity', `${humidity}%`);
+    setText('weatherWind', `${wind} km/h`);
+    setText('weatherRain', `${rainChance}%`);
+
+    // AI weather impact
+    let impact = 'Low Risk';
+    let impactColor = 'var(--emerald)';
+    if (rainChance > 60) { impact = '⚠️ Rain Likely — Cover Alert'; impactColor = 'var(--red-hot)'; }
+    else if (rainChance > 30) { impact = '🌧 Light Rain Possible'; impactColor = 'var(--amber)'; }
+    else if (temp > 38) { impact = '🌡️ Heat Advisory — Hydrate Staff'; impactColor = 'var(--amber)'; }
+    else if (wind > 35) { impact = '💨 High Wind — Check Banners'; impactColor = 'var(--amber)'; }
+
+    setText('weatherImpact', impact);
+    const aiWeatherEl = document.getElementById('aiWeatherImpact');
+    if (aiWeatherEl) { aiWeatherEl.innerText = impact; aiWeatherEl.style.color = impactColor; }
+  } catch (e) {
+    setText('weatherDesc', 'Weather unavailable');
+  }
+}
+
+function decodeWMO(code) {
+  if (code === 0) return { icon: '☀️', desc: 'Clear Sky' };
+  if (code <= 3) return { icon: '🌤️', desc: 'Partly Cloudy' };
+  if (code <= 9) return { icon: '🌫️', desc: 'Foggy' };
+  if (code <= 19) return { icon: '🌦️', desc: 'Drizzle' };
+  if (code <= 29) return { icon: '🌧️', desc: 'Rain' };
+  if (code <= 39) return { icon: '❄️', desc: 'Snow' };
+  if (code <= 49) return { icon: '🌫️', desc: 'Fog' };
+  if (code <= 59) return { icon: '🌦️', desc: 'Drizzle' };
+  if (code <= 69) return { icon: '🌧️', desc: 'Rain' };
+  if (code <= 79) return { icon: '❄️', desc: 'Snow Grains' };
+  if (code <= 82) return { icon: '🌧️', desc: 'Rain Showers' };
+  if (code <= 84) return { icon: '🌨️', desc: 'Snow Showers' };
+  if (code <= 94) return { icon: '⛈️', desc: 'Thunderstorm' };
+  return { icon: '⛈️', desc: 'Thunderstorm + Hail' };
+}
+
+// ─── AI Analysis Engine ───────────────────────────────────────────────
+function runAIAnalysis() {
+  const preparing = allOrders.filter(o => o.status === 'preparing').length;
+  const home = matchState.homeScore;
+  const away = matchState.awayScore;
+  const minute = matchState.minute || 0;
+  const status = matchState.status;
+
+  // Momentum
+  let momentum = 'Even Match';
+  if (home > away + 1) momentum = `🔵 ${document.getElementById('ctrlTeamA')?.innerText || 'Team A'} dominating`;
+  else if (away > home + 1) momentum = `🔴 ${document.getElementById('ctrlTeamB')?.innerText || 'Team B'} dominating`;
+  else if (home === away && minute > 70) momentum = '⚡ Tense — Could go either way!';
+  setText('aiMomentum', momentum);
+
+  // Crowd reaction
+  let reaction = 'Calm & Settled';
+  if (home + away > 3) reaction = '🔥 Electric! High scoring match';
+  else if (minute > 80 && Math.abs(home - away) <= 1) reaction = '😰 Nail-biting tension!';
+  else if (status === 'halftime') reaction = '🍔 Concession rush!';
+  setText('aiCrowdReaction', reaction);
+
+  // AI alert
+  let alert = 'All systems normal ✅';
+  if (preparing > 15) alert = `⚠️ ${preparing} orders in queue! Dispatch needed`;
+  else if (weatherData?.rainChance > 60) alert = '🌧 Rain likely — alert attendees';
+  else if (minute > 80 && status === 'second_half') alert = '📣 Pre-exit crowd management soon';
+  setText('aiAlert', alert);
+
+  // Predicted winner
+  let pred = 'Too early to predict';
+  if (status === 'pre_match' || status === 'reset') pred = 'Match hasn\'t started';
+  else if (home > away && minute > 60) pred = `🔵 ${document.getElementById('ctrlTeamA')?.innerText || 'Team A'} — strong lead`;
+  else if (away > home && minute > 60) pred = `🔴 ${document.getElementById('ctrlTeamB')?.innerText || 'Team B'} — strong lead`;
+  else pred = '🤝 Draw predicted at full time';
+  const pw = document.getElementById('aiPredWinner');
+  if (pw) pw.innerText = pred;
+
+  // Excitement level
+  const excitement = home + away > 4 ? '🔥🔥🔥 INSANE' :
+                     home + away > 2 ? '🔥🔥 High' :
+                     home + away > 0 ? '🔥 Moderate' : '😐 Pre-match calm';
+  const ex = document.getElementById('aiExcitement');
+  if (ex) ex.innerText = excitement;
+
+  // Next key moment
+  const sportMoments = {
+    cricket: ['Next wicket predicted in ~2 overs', 'Batting powerplay incoming', 'Strategic timeout expected'],
+    football: ['Corner kick opportunity', 'Substitution window approaching', 'Set piece situation developing'],
+    basketball: ['Timeout expected', 'Quarter break soon', 'Fast break opportunity'],
+    volleyball: ['Set point approaching', 'Rally likely to continue', 'Serving pressure building'],
+  };
+  const moments = sportMoments[currentSport] || sportMoments.football;
+  const nm = document.getElementById('aiNextMoment');
+  if (nm) nm.innerText = moments[Math.floor(Date.now() / 10000) % moments.length];
+}
+
+// ─── Stadium & Sport Config ────────────────────────────────────────────
+const sportIcons = {
+  cricket: '🏏', football: '⚽', basketball: '🏀', volleyball: '🏐', kabaddi: '🤸', hockey: '🏑'
+};
+const sportLabels = {
+  cricket: 'Cricket Match', football: 'Football / Soccer',
+  basketball: 'Basketball Game', volleyball: 'Volleyball Match',
+  kabaddi: 'Kabaddi Match', hockey: 'Hockey Match'
+};
+const sportControlLabels = {
+  cricket: ['Start Innings', 'Drinks Break', '2nd Innings', 'Match Over', 'Reset'],
+  football: ['Kick Off', 'Half Time', '2nd Half', 'Full Time', 'Reset'],
+  basketball: ['Tip Off', 'Half Time', '2nd Half', 'Final Buzzer', 'Reset'],
+  volleyball: ['Serve', 'Set Break', '3rd Set', 'Match Point', 'Reset'],
+  kabaddi: ['Start', 'Half Time', '2nd Half', 'End', 'Reset'],
+  hockey: ['Kick Off', 'Half Time', '2nd Half', 'Full Time', 'Reset'],
+};
+
+function updateStadium() {
+  currentStadium = document.getElementById('stadiumSelect')?.value || 'metastadium';
+  showToast(`🏟️ Stadium updated to ${document.getElementById('stadiumSelect')?.options[document.getElementById('stadiumSelect').selectedIndex]?.text}`);
+}
+
+function updateSport() {
+  currentSport = document.getElementById('sportSelect')?.value || 'football';
+  const icon = sportIcons[currentSport] || '🏆';
+  // Update match label
+  const label = document.getElementById('matchSportLabel');
+  if (label) label.innerText = `${icon} ${sportLabels[currentSport]} Scoreboard`;
+  // Update control buttons
+  const labels = sportControlLabels[currentSport] || sportControlLabels.football;
+  const actions = ['start', 'halftime', 'second_half', 'end', 'reset'];
+  const container = document.getElementById('matchControlBtns');
+  if (container) {
+    container.innerHTML = labels.map((l, i) => {
+      const cls = i === 3 ? 'btn-danger' : i === 0 ? 'btn-success' : 'btn-primary';
+      return `<button class="btn ${cls}" onclick="matchControl('${actions[i]}')">${icon} ${l}</button>`;
+    }).join('');
+  }
+  showToast(`${icon} Sport set to ${sportLabels[currentSport]}`);
+}
+
+function applyMatchConfig() {
+  const teamA = document.getElementById('teamAName')?.value || 'Team A';
+  const teamB = document.getElementById('teamBName')?.value || 'Team B';
+  setText('ctrlTeamA', teamA);
+  setText('ctrlTeamB', teamB);
+  setText('topTeamHome', `${sportIcons[currentSport] || '🔵'} ${teamA}`);
+  setText('topTeamAway', `${teamB} 🔴`);
+  setText('teamAIcon', sportIcons[currentSport] || '🔵');
+  setText('teamBIcon', '🔴');
+  updateSport();
+  showToast(`✅ Match config applied — ${teamA} vs ${teamB}`);
+  // Push to server
+  fetch('/api/match/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamA, teamB, sport: currentSport, stadium: currentStadium })
+  }).catch(() => {});
+}
+
+// ─── Manual Score Control ─────────────────────────────────────────────
+function adjustScore(team, delta) {
+  const inputId = team === 'home' ? 'homeScoreInput' : 'awayScoreInput';
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const newVal = Math.max(0, parseInt(el.value || 0) + delta);
+  el.value = newVal;
+}
+
+async function pushManualScore() {
+  const home = parseInt(document.getElementById('homeScoreInput')?.value || 0);
+  const away = parseInt(document.getElementById('awayScoreInput')?.value || 0);
+  matchState.homeScore = home;
+  matchState.awayScore = away;
+
+  setText('ctrlHomeScore', home);
+  setText('ctrlAwayScore', away);
+  setText('topScore', `${home} : ${away}`);
+
+  try {
+    await fetch('/api/match/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ homeScore: home, awayScore: away, sport: currentSport })
+    });
+    showToast(`✅ Score pushed — ${home} : ${away}`);
+  } catch (e) {
+    // Emit via socket if API not available
+    socket.emit('admin_score_update', { homeScore: home, awayScore: away });
+    showToast('📡 Score updated via socket');
+  }
 }
 
 // ─── Chart.js ──────────────────────────────────────────────────────────
@@ -43,28 +278,21 @@ function initCharts() {
       datasets: [{
         label: 'Live Attendance',
         data: [],
-        borderColor: '#4493f8',
-        backgroundColor: 'rgba(68,147,248,0.12)',
-        tension: 0.4,
-        fill: true,
-        pointRadius: 0
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245,158,11,0.08)',
+        tension: 0.4, fill: true, pointRadius: 0
       }]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
         y: {
-          beginAtZero: true,
-          suggestedMax: 60000,
-          ticks: { color: '#8b949e', font: { size: 11 }, callback: v => (v/1000).toFixed(0)+'k' },
-          grid: { color: 'rgba(255,255,255,0.05)' }
+          beginAtZero: true, suggestedMax: 60000,
+          ticks: { color: '#8b7355', font: { size: 11 }, callback: v => (v/1000).toFixed(0)+'k' },
+          grid: { color: 'rgba(255,255,255,0.04)' }
         },
-        x: {
-          display: false,
-          grid: { display: false }
-        }
+        x: { display: false }
       },
       animation: false
     }
@@ -82,37 +310,60 @@ function switchPanel(panelId) {
   if (btn) btn.classList.add('active');
 
   const titles = {
-    overview: 'Overview',
-    crowd: 'Crowd Monitor',
-    orders: 'Food Orders',
-    staff: 'Staff Dispatch',
-    alerts: 'Alert Center',
-    cameras: 'Live CCTV Feeds',
-    match: 'Match Control',
-    settings: 'Venue Settings'
+    overview: ['Overview', 'Real-time venue monitoring'],
+    crowd: ['Crowd Monitor', 'Zone density & heatmap'],
+    orders: ['Food Orders', 'Live order queue management'],
+    staff: ['Staff Dispatch', 'Deploy & manage field staff'],
+    alerts: ['Alert Center', 'All venue alerts'],
+    cameras: ['Live CCTV', 'AI-powered crowd detection'],
+    match: ['Match Control', 'Score, stadium & AI intelligence'],
+    menu: ['Menu Management', 'Add, toggle & remove items'],
+    scanner: ['QR Scanner', 'Order pickup confirmation'],
+    settings: ['Settings', 'Venue & broadcast configuration'],
   };
-  const el = document.getElementById('panelTitle');
-  if (el) el.innerText = titles[panelId] || panelId;
+  const [t, s] = titles[panelId] || ['Dashboard', ''];
+  setText('panelTitle', t);
+  setText('panelSubtitle', s);
 
-  // Refresh data on switch
   if (panelId === 'staff') fetchStaff();
   if (panelId === 'orders') fetchOrders();
+  if (panelId === 'menu') fetchMenuItems();
+}
+
+// ─── WEBCAM CCTV ───────────────────────────────────────────────────────
+async function startWebcam() {
+  const video = document.getElementById('webcamFeed');
+  const placeholder = document.getElementById('webcamPlaceholder');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    video.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    // Simulated AI density readings
+    setInterval(() => {
+      const count = Math.floor(Math.random() * 80 + 20);
+      setText('webcamAI', `AI: ${count}p · ${count > 60 ? 'HIGH' : count > 35 ? 'MED' : 'LOW'}`);
+      const badge = document.getElementById('webcamDensity');
+      if (badge) {
+        badge.className = `cctv-crowd-badge ${count > 60 ? 'high' : count > 35 ? 'medium' : 'low'}`;
+        badge.innerText = count > 60 ? '🔴 High' : count > 35 ? '🟡 Medium' : '🟢 Low';
+      }
+    }, 2000);
+  } catch (e) {
+    if (placeholder) placeholder.innerHTML = '<span style="font-size:2rem">🚫</span><span style="color:#f87171;font-size:0.85rem;">Camera access denied</span>';
+    showToast('Camera access denied. Check browser permissions.');
+  }
 }
 
 // ─── Socket: Venue Update ──────────────────────────────────────────────
 socket.on('venue_update', data => {
   venueState = data;
-
-  // KPI: Attendance
   setText('kpiAttendance', data.totalAttendance.toLocaleString('en-IN'));
   const pct = ((data.totalAttendance / data.capacity) * 100).toFixed(1);
   setText('kpiAttendancePct', `${pct}% capacity`);
-
-  // KPI: Avg Wait
   const avgWait = data.concessions.reduce((a, c) => a + c.queue_time, 0) / data.concessions.length;
   setText('kpiWaitTime', avgWait.toFixed(1));
 
-  // Chart update
   if (densityChart) {
     densityChart.data.labels.push(new Date().toLocaleTimeString());
     densityChart.data.datasets[0].data.push(data.totalAttendance);
@@ -123,184 +374,161 @@ socket.on('venue_update', data => {
     densityChart.update();
   }
 
-  // Zone bars in Overview
   renderZoneBars(data.zones, data.capacity);
-
-  // Gate flow
   renderGateFlow(data.gates);
-
-  // Concession list
   renderConcessionList(data.concessions);
-
-  // Crowd panel
   renderCrowdPanel(data);
 });
 
 // ─── Socket: Match Update ──────────────────────────────────────────────
 socket.on('match_update', data => {
-  setText('miniScore', `${data.homeScore} : ${data.awayScore}`);
-  setText('miniStatus', data.minute > 0 ? `${data.minute}'` : data.status.replace('_', ' ').toUpperCase());
+  matchState = { ...matchState, ...data };
+  setText('topScore', `${data.homeScore} : ${data.awayScore}`);
+  setText('topStatus', data.minute > 0 ? `${data.minute}'` : data.status.replace('_', ' ').toUpperCase());
   setText('ctrlHomeScore', data.homeScore);
   setText('ctrlAwayScore', data.awayScore);
   setText('ctrlStatus', data.status.replace(/_/g, ' ').toUpperCase());
   setText('ctrlMinute', data.minute > 0 ? `${data.minute}'` : '—');
-
-  // Build event list
+  // Sync score inputs
+  const hi = document.getElementById('homeScoreInput');
+  const ai = document.getElementById('awayScoreInput');
+  if (hi) hi.value = data.homeScore;
+  if (ai) ai.value = data.awayScore;
   if (data.events && data.events.length > allMatchEvents.length) {
     allMatchEvents = data.events;
     renderMatchEvents();
   }
 });
 
-// ─── Socket: Alerts ────────────────────────────────────────────────────
-socket.on('alerts_init', existingAlerts => {
-  allAlerts = existingAlerts;
-  renderAllAlerts();
-});
-
+socket.on('alerts_init', alerts => { allAlerts = alerts; renderAllAlerts(); });
 socket.on('alert', alert => {
   allAlerts.unshift(alert);
   unreadAlerts++;
   const badge = document.getElementById('alertBadge');
   if (badge) badge.innerText = unreadAlerts;
-
-  // Append to overview feed
-  const feed = document.getElementById('alertFeedOverview');
-  if (feed) {
-    const div = document.createElement('div');
-    div.className = `alert-item ${alert.type}`;
-    div.innerHTML = `<span>${alert.message}</span><button class="btn btn-sm btn-secondary" onclick="ackAlert(this, ${alert.id})">Ack</button>`;
-    feed.insertBefore(div, feed.firstChild);
-    if (feed.children.length > 12) feed.lastChild.remove();
-  }
-
+  appendAlertToOverview(alert);
   renderAllAlerts();
-
-  // Increment orders KPI if it's a revenue/order event (just use orders array length)
   refreshOrderKPIs();
 });
-
-// ─── Socket: Staff ─────────────────────────────────────────────────────
 socket.on('staff_update', updated => {
   const idx = allStaff.findIndex(s => s.id === updated.id);
   if (idx >= 0) allStaff[idx] = updated;
   renderStaffGrid();
 });
-
 socket.on('new_order', () => fetchOrders());
 socket.on('order_update', () => fetchOrders());
+socket.on('menu_update', updated => { menuItems = updated; renderMenuManagement(); });
 
-// ─── Render: Zone Bars (Overview) ─────────────────────────────────────
-function renderZoneBars(zones, totalCap) {
+// ─── Render: Zone Bars ─────────────────────────────────────────────────
+function renderZoneBars(zones, cap) {
   const container = document.getElementById('zoneBars');
   if (!container) return;
   container.innerHTML = zones.map(z => {
     const pct = Math.min(100, (z.current / z.capacity) * 100);
-    const color = pct > 85 ? 'var(--danger)' : pct > 55 ? 'var(--warning)' : 'var(--success)';
+    const color = pct > 85 ? 'var(--red-hot)' : pct > 55 ? 'var(--amber)' : 'var(--emerald)';
     return `
       <div style="margin-bottom:14px;">
-        <div style="display:flex;justify-content:space-between;font-size:0.83rem;margin-bottom:6px;">
-          <span style="font-weight:600">${z.name}</span>
+        <div style="display:flex;justify-content:space-between;font-size:0.83rem;margin-bottom:5px;">
+          <span style="font-weight:700;color:var(--walnut-cream)">${z.name}</span>
           <span style="color:var(--text-muted)">${z.current.toLocaleString('en-IN')} / ${z.capacity.toLocaleString('en-IN')}</span>
         </div>
-        <div style="width:100%;height:8px;background:var(--border-color);border-radius:4px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;transition:width 0.5s ease;"></div>
+        <div style="width:100%;height:8px;background:rgba(0,0,0,0.5);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;transition:width 0.5s;box-shadow:0 0 8px ${color};"></div>
         </div>
-        <div style="text-align:right;font-size:0.72rem;color:${color};margin-top:3px;font-weight:700;">${pct.toFixed(0)}%</div>
+        <div style="text-align:right;font-size:0.72rem;color:${color};margin-top:3px;font-weight:900;">${pct.toFixed(0)}%</div>
       </div>`;
   }).join('');
 }
 
-// ─── Render: Gate Flow ────────────────────────────────────────────────
+// ─── Render: Gate Flow ─────────────────────────────────────────────────
 function renderGateFlow(gates) {
   const container = document.getElementById('gateFlowList');
   if (!container) return;
-  const maxFlow = Math.max(...gates.map(g => g.throughput));
+  const maxFlow = Math.max(...gates.map(g => g.throughput), 1);
   container.innerHTML = gates.slice(0, 6).map(g => {
     const pct = Math.min(100, (g.current_flow / maxFlow) * 100);
-    const color = g.queue_length > 100 ? 'var(--danger)' : g.queue_length > 30 ? 'var(--warning)' : 'var(--success)';
+    const color = g.queue_length > 100 ? 'var(--red-hot)' : g.queue_length > 30 ? 'var(--amber)' : 'var(--emerald)';
     return `
-      <div class="gate-flow-item">
-        <span class="gate-name">${g.name}</span>
-        <div class="gate-bar-wrap">
-          <div class="gate-bar" style="width:${pct}%;background:${color};"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:0.82rem;">
+        <span style="min-width:70px;font-weight:700;color:var(--walnut-cream)">${g.name}</span>
+        <div style="flex:1;height:6px;background:rgba(0,0,0,0.5);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;"></div>
         </div>
-        <span class="gate-queue">${g.queue_length} queued</span>
+        <span style="color:${color};font-weight:700;min-width:60px;text-align:right;">${g.queue_length} q</span>
       </div>`;
   }).join('');
 }
 
-// ─── Render: Concession List ──────────────────────────────────────────
+// ─── Render: Concession List ───────────────────────────────────────────
 function renderConcessionList(concessions) {
   const container = document.getElementById('concessionList');
   if (!container) return;
   container.innerHTML = concessions.map(c => {
-    const color = c.queue_time > 10 ? 'var(--danger)' : c.queue_time > 5 ? 'var(--warning)' : 'var(--success)';
+    const color = c.queue_time > 10 ? 'var(--red-hot)' : c.queue_time > 5 ? 'var(--amber)' : 'var(--emerald)';
     return `
-      <div class="concession-item">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed rgba(107,76,42,0.2);">
         <div>
-          <div class="concession-name">${c.name}</div>
-          <div class="concession-zone">${c.zone.toUpperCase()} • ${c.orders_pending} pending</div>
+          <div style="font-weight:700;font-size:0.85rem;color:var(--walnut-cream)">${c.name}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted)">${c.zone.toUpperCase()} · ${c.orders_pending} pending</div>
         </div>
-        <div class="concession-wait" style="color:${color}">${c.queue_time}m wait</div>
+        <div style="color:${color};font-weight:900;font-size:0.88rem;">${c.queue_time}m</div>
       </div>`;
   }).join('');
 }
 
 // ─── Render: Crowd Panel ───────────────────────────────────────────────
 function renderCrowdPanel(data) {
-  // Big number
   setText('crowdTotal', data.totalAttendance.toLocaleString('en-IN'));
-
-  // Ring progress
   const pct = Math.min(100, (data.totalAttendance / data.capacity) * 100);
   setText('ringText', `${pct.toFixed(0)}%`);
   const ring = document.getElementById('ringProgress');
-  if (ring) {
-    const circumference = 327;
-    ring.style.strokeDashoffset = circumference - (circumference * pct / 100);
-  }
+  if (ring) ring.style.strokeDashoffset = 327 - (327 * pct / 100);
 
-  // Zone cards
   const zonesContainer = document.getElementById('crowdZonesDetail');
   if (zonesContainer) {
     zonesContainer.innerHTML = data.zones.map(z => {
       const zpct = Math.min(100, (z.current / z.capacity) * 100);
-      const color = zpct > 85 ? 'var(--danger)' : zpct > 55 ? 'var(--warning)' : 'var(--success)';
+      const color = zpct > 85 ? 'var(--red-hot)' : zpct > 55 ? 'var(--amber)' : 'var(--emerald)';
       const label = zpct > 85 ? '🔴 Critical' : zpct > 55 ? '🟡 Busy' : '🟢 Normal';
       return `
-        <div class="zone-detail-card">
-          <div class="zone-detail-name">${z.name}</div>
-          <div class="zone-detail-count">${z.current.toLocaleString('en-IN')} / ${z.capacity.toLocaleString('en-IN')}</div>
-          <div class="zone-detail-bar">
-            <div class="zone-detail-fill" style="width:${zpct}%;background:${color};"></div>
+        <div style="background:rgba(0,0,0,0.35);border:1px solid var(--border-color);border-radius:10px;padding:14px;">
+          <div style="font-weight:900;color:var(--walnut-cream);margin-bottom:4px;">${z.name}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;">${z.current.toLocaleString('en-IN')} / ${z.capacity.toLocaleString('en-IN')}</div>
+          <div style="width:100%;height:8px;background:rgba(0,0,0,0.5);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${zpct}%;background:${color};border-radius:4px;transition:width 0.5s;"></div>
           </div>
-          <div class="zone-detail-pct" style="color:${color}">${zpct.toFixed(0)}% — ${label}</div>
+          <div style="text-align:right;font-size:0.72rem;color:${color};margin-top:4px;font-weight:900;">${zpct.toFixed(0)}% — ${label}</div>
         </div>`;
     }).join('');
   }
 
-  // Heatmap
   const heatmap = document.getElementById('heatmapGrid');
   if (heatmap && data.zones) {
     heatmap.innerHTML = data.zones.map(z => {
       const zpct = Math.min(100, (z.current / z.capacity) * 100);
       const alpha = 0.15 + (zpct / 100) * 0.7;
-      const color = zpct > 85 ? `rgba(248,81,73,${alpha})` : zpct > 55 ? `rgba(210,153,34,${alpha})` : `rgba(63,185,80,${alpha})`;
+      const color = zpct > 85 ? `rgba(220,38,38,${alpha})` : zpct > 55 ? `rgba(245,158,11,${alpha})` : `rgba(5,150,105,${alpha})`;
       const icon = zpct > 85 ? '🔴' : zpct > 55 ? '🟡' : '🟢';
       return `
-        <div class="heatmap-cell" style="background:${color};">
-          <div style="font-size:1.3rem">${icon}</div>
-          <div style="font-weight:800;font-size:0.8rem">${zpct.toFixed(0)}%</div>
-          <div class="cell-name">${z.name.split(' ')[0]}</div>
+        <div style="background:${color};border-radius:10px;padding:14px;text-align:center;border:1px solid rgba(255,255,255,0.06);">
+          <div style="font-size:1.4rem">${icon}</div>
+          <div style="font-weight:900;font-size:0.85rem;color:var(--walnut-cream);margin-top:4px">${zpct.toFixed(0)}%</div>
+          <div style="font-size:0.7rem;color:rgba(255,255,255,0.6);margin-top:2px">${z.name.split(' ')[0]}</div>
         </div>`;
-    }).join('') +
-    `<div class="heatmap-cell" style="background:rgba(63,185,80,0.15)">
-      <div style="font-size:1.3rem">🟢</div>
-      <div style="font-weight:800;font-size:0.8rem">—</div>
-      <div class="cell-name">Parking</div>
-    </div>`;
+    }).join('');
   }
+}
+
+// ─── Append alert to overview ──────────────────────────────────────────
+function appendAlertToOverview(alert) {
+  const feed = document.getElementById('alertFeedOverview');
+  if (!feed) return;
+  const typeIcon = { danger: '🔴', warning: '🟡', info: '🔵', success: '🟢' };
+  const div = document.createElement('div');
+  div.style.cssText = 'margin-bottom:6px;padding:8px;background:rgba(0,0,0,0.3);border-radius:8px;font-size:0.82rem;color:var(--walnut-cream);';
+  div.innerText = `${typeIcon[alert.type] || '•'} ${alert.message}`;
+  feed.insertBefore(div, feed.firstChild);
+  if (feed.children.length > 10) feed.lastChild.remove();
 }
 
 // ─── Staff ─────────────────────────────────────────────────────────────
@@ -310,64 +538,57 @@ async function fetchStaff() {
     const data = await res.json();
     allStaff = data.data;
     renderStaffGrid();
-  } catch (e) { console.error('Staff fetch error:', e); }
+  } catch (e) {}
 }
 
 function renderStaffGrid() {
   const grid = document.getElementById('staffGrid');
   if (!grid) return;
+  const filtered = currentStaffFilter === 'all' ? allStaff : allStaff.filter(s => s.role === currentStaffFilter);
+  setText('staffAvail', allStaff.filter(s => s.status === 'available').length);
+  setText('staffDeployed', allStaff.filter(s => s.status !== 'available').length);
 
-  const filtered = currentStaffFilter === 'all'
-    ? allStaff
-    : allStaff.filter(s => s.role === currentStaffFilter);
-
-  const avail = allStaff.filter(s => s.status === 'available').length;
-  const dep = allStaff.filter(s => s.status !== 'available').length;
-  setText('staffAvail', avail);
-  setText('staffDeployed', dep);
-
-  if (filtered.length === 0) {
+  if (!filtered.length) {
     grid.innerHTML = `<div class="empty-state"><span>👷</span><p>No staff in this category</p></div>`;
     return;
   }
-
-  grid.innerHTML = filtered.map(s => {
-    const roleClass = { security: 'role-security', service: 'role-service', medical: 'role-medical' }[s.role] || 'role-service';
-    const statusClass = s.status === 'available' ? 's-available' : 's-dispatched';
-    const roleIcon = { security: '🛡️', service: '🤝', medical: '🏥' }[s.role] || '👤';
-    return `
-      <div class="staff-card" data-role="${s.role}">
-        <div class="staff-card-header">
-          <div class="staff-name">${roleIcon} ${s.name}</div>
-          <div class="staff-role-badge ${roleClass}">${s.role}</div>
+  const roleIcon = { security: '🛡️', service: '🤝', medical: '🏥' };
+  grid.innerHTML = filtered.map(s => `
+    <div class="staff-card">
+      <div class="staff-card-top">
+        <div class="staff-avatar">${roleIcon[s.role] || '👤'}</div>
+        <div>
+          <div class="staff-name">${s.name}</div>
+          <div class="staff-role">${s.role}</div>
         </div>
-        <div class="staff-info">📍 Zone: ${s.zone.replace('_', ' ').toUpperCase()}</div>
-        ${s.currentTask ? `<div class="staff-task">▶ ${s.currentTask}</div>` : ''}
-        <div class="staff-status-row">
-          <span class="staff-status-badge ${statusClass}">${s.status}</span>
-          ${s.status === 'available'
-            ? `<button class="btn btn-sm btn-warning" onclick="dispatchStaff('${s.id}')">Dispatch</button>`
-            : `<button class="btn btn-sm btn-secondary" onclick="releaseStaff('${s.id}')">Release</button>`}
-        </div>
-      </div>`;
-  }).join('');
+      </div>
+      <div class="staff-status">
+        <div class="staff-dot ${s.status === 'available' ? 'available' : 'busy'}"></div>
+        <span style="font-size:0.82rem;color:var(--walnut-cream);">${s.status}</span>
+      </div>
+      <div class="staff-location">📍 ${s.zone?.replace('_', ' ').toUpperCase() || 'Unassigned'}</div>
+      ${s.currentTask ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">▶ ${s.currentTask}</div>` : ''}
+      <button class="dispatch-btn" onclick="${s.status === 'available' ? `dispatchStaff('${s.id}')` : `releaseStaff('${s.id}')`}">
+        ${s.status === 'available' ? '🚀 Dispatch' : '✅ Release'}
+      </button>
+    </div>`).join('');
 }
 
 function filterStaff(role) {
   currentStaffFilter = role;
   document.querySelectorAll('.staff-filter').forEach(b => b.classList.remove('active'));
-  const btn = document.querySelector(`.staff-filter[onclick="filterStaff('${role}')"]`);
-  if (btn) btn.classList.add('active');
+  document.querySelectorAll(`.staff-filter`).forEach(b => {
+    if (b.getAttribute('onclick') === `filterStaff('${role}')`) b.classList.add('active');
+  });
   renderStaffGrid();
 }
 
 async function dispatchStaff(id) {
-  const zone = prompt('Enter zone to dispatch to (e.g. north, south, east, west, vip):', 'north');
+  const zone = prompt('Zone to dispatch to (north/south/east/west/vip):', 'north');
   if (!zone) return;
   await fetch(`/api/staff/${id}/dispatch`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ zone, task: 'Manual dispatch by command center' })
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ zone, task: 'Manual dispatch' })
   });
   fetchStaff();
 }
@@ -385,7 +606,7 @@ async function fetchOrders() {
     allOrders = data.data;
     renderOrdersGrid();
     refreshOrderKPIs();
-  } catch (e) { console.error('Orders fetch error:', e); }
+  } catch (e) {}
 }
 
 function refreshOrderKPIs() {
@@ -396,36 +617,32 @@ function refreshOrderKPIs() {
   setText('ordersReady', ready);
   setText('ordersDelivered', delivered);
   setText('kpiOrders', allOrders.length);
-
-  const revenue = allOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const revenue = allOrders.reduce((s, o) => s + (o.total || 0), 0);
   setText('kpiRevenue', '₹' + revenue.toLocaleString('en-IN'));
+  setText('ordersRevenue', '₹' + revenue.toLocaleString('en-IN'));
 }
 
 function renderOrdersGrid() {
   const grid = document.getElementById('ordersGrid');
   if (!grid) return;
-
-  if (allOrders.length === 0) {
-    grid.innerHTML = `<div class="empty-state"><span>📋</span><p>No orders yet. Waiting for attendees to place orders...</p></div>`;
+  if (!allOrders.length) {
+    grid.innerHTML = `<div class="empty-state"><span>📋</span><p>No orders yet.</p></div>`;
     return;
   }
-
-  grid.innerHTML = allOrders.slice(0, 30).map(o => {
-    const sc = { preparing: 'status-preparing', ready: 'status-ready', delivered: 'status-delivered' }[o.status] || 'status-preparing';
-    return `
-      <div class="order-card">
-        <div class="order-id">${o.id}</div>
-        <div class="order-seat">🪑 ${o.seat}</div>
-        <div class="order-zone">📍 ${o.zone?.toUpperCase()} • ${o.concession}</div>
-        <div class="order-items">
-          ${(o.items || []).map(i => `<div class="order-item-row"><span>${i.image} ${i.name}</span><span>x${i.qty}</span></div>`).join('')}
-        </div>
-        <div class="order-total">Total: ₹${(o.total || 0).toLocaleString('en-IN')}</div>
-        <div><span class="order-status-badge ${sc}">${o.status}</span></div>
-        ${o.status === 'preparing' ? `<div class="order-eta">⏱ Est. ${o.remainingTime ?? o.estimatedTime}m remaining</div>
-          <button class="btn btn-success btn-sm" onclick="completeOrder('${o.id}')">✅ Mark Ready</button>` : ''}
-      </div>`;
-  }).join('');
+  const sc = { preparing: 'preparing', ready: 'ready', delivered: 'delivered' };
+  grid.innerHTML = allOrders.slice(0, 30).map(o => `
+    <div style="background:rgba(0,0,0,0.3);border:1px solid var(--border-color);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:900;color:var(--amber);font-family:'Georgia',serif;">${o.id}</div>
+        <span class="status-badge ${sc[o.status] || 'preparing'}">${o.status}</span>
+      </div>
+      <div style="font-size:0.8rem;color:var(--walnut-cream);">🪑 ${o.seat} · 📍 ${o.zone?.toUpperCase()} · ${o.concession}</div>
+      <div style="font-size:0.8rem;color:var(--text-muted);">${(o.items || []).map(i => `${i.image || '🍽'} ${i.name} x${i.qty}`).join(' · ')}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+        <div style="font-weight:900;color:var(--walnut-cream)">₹${(o.total || 0).toLocaleString('en-IN')}</div>
+        ${o.status === 'preparing' ? `<button class="btn btn-success btn-sm" onclick="completeOrder('${o.id}')">✅ Mark Ready</button>` : ''}
+      </div>
+    </div>`).join('');
 }
 
 async function completeOrder(id) {
@@ -440,38 +657,28 @@ async function loadInitialAlerts() {
     const data = await res.json();
     allAlerts = data.data;
     renderAllAlerts();
-  } catch (e) { console.error('Alerts fetch error:', e); }
+  } catch (e) {}
 }
 
 function renderAllAlerts() {
   const list = document.getElementById('alertsFullList');
   if (!list) return;
-
-  const filtered = currentAlertFilter === 'all'
-    ? allAlerts
-    : allAlerts.filter(a => a.type === currentAlertFilter);
-
-  if (filtered.length === 0) {
-    list.innerHTML = `<div class="empty-state"><span>🔔</span><p>No alerts in this category</p></div>`;
+  const filtered = currentAlertFilter === 'all' ? allAlerts : allAlerts.filter(a => a.type === currentAlertFilter);
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state"><span>🔔</span><p>No alerts</p></div>`;
     return;
   }
-
   const typeIcon = { danger: '🔴', warning: '🟡', info: '🔵', success: '🟢' };
   list.innerHTML = filtered.map(a => {
-    const time = new Date(a.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const time = new Date(a.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     return `
-      <div class="alert-full-item ${a.type} ${a.acknowledged ? 'acknowledged' : ''}" id="alert-${a.id}">
-        <div class="alert-body">
-          <div class="alert-msg">${typeIcon[a.type] || '•'} ${a.message}</div>
-          <div class="alert-meta">
-            <span>🕐 ${time}</span>
-            <span>Source: ${a.source || 'system'}</span>
-            ${a.acknowledged ? '<span style="color:var(--success)">✔ Acknowledged</span>' : ''}
-          </div>
+      <div class="alert-row ${a.type} ${a.acknowledged ? 'acknowledged' : ''}">
+        <div class="alert-icon">${typeIcon[a.type] || '•'}</div>
+        <div style="flex:1;">
+          <div class="alert-msg">${a.message}</div>
+          <div class="alert-time">🕐 ${time} · ${a.source || 'system'} ${a.acknowledged ? '· ✔ Acked' : ''}</div>
         </div>
-        <div class="alert-actions">
-          ${!a.acknowledged ? `<button class="btn btn-sm btn-secondary" onclick="ackAlertFull(${a.id})">Ack</button>` : ''}
-        </div>
+        ${!a.acknowledged ? `<button class="btn btn-sm btn-primary" onclick="ackAlertFull(${a.id})" style="flex-shrink:0;">Ack</button>` : ''}
       </div>`;
   }).join('');
 }
@@ -479,24 +686,18 @@ function renderAllAlerts() {
 function filterAlerts(type) {
   currentAlertFilter = type;
   document.querySelectorAll('.alert-filter').forEach(b => b.classList.remove('active'));
-  const btn = document.querySelector(`.alert-filter[onclick="filterAlerts('${type}')"]`);
-  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.alert-filter').forEach(b => {
+    if (b.getAttribute('onclick') === `filterAlerts('${type}')`) b.classList.add('active');
+  });
   renderAllAlerts();
-}
-
-function ackAlert(btn, id) {
-  btn.parentElement.remove();
-  unreadAlerts = Math.max(0, unreadAlerts - 1);
-  const badge = document.getElementById('alertBadge');
-  if (badge) badge.innerText = unreadAlerts;
-  const a = allAlerts.find(a => a.id === id);
-  if (a) a.acknowledged = true;
 }
 
 async function ackAlertFull(id) {
   await fetch(`/api/alerts/${id}/acknowledge`, { method: 'POST' });
   const a = allAlerts.find(a => a.id === id);
   if (a) a.acknowledged = true;
+  unreadAlerts = Math.max(0, unreadAlerts - 1);
+  setText('alertBadge', unreadAlerts);
   renderAllAlerts();
 }
 
@@ -504,62 +705,257 @@ async function ackAlertFull(id) {
 function renderMatchEvents() {
   const list = document.getElementById('matchEventsList');
   if (!list) return;
-  if (allMatchEvents.length === 0) {
-    list.innerHTML = `<div class="empty-state"><p>⚽ No events yet</p></div>`;
+  if (!allMatchEvents.length) {
+    list.innerHTML = `<div class="empty-state"><p>No events yet</p></div>`;
     return;
   }
-  const icons = { goal: '⚽', yellow_card: '🟨', red_card: '🟥', substitution: '🔄' };
+  const sportEventIcon = {
+    cricket: { goal: '🏏', wicket: '🎯', yellow_card: '⚠️', substitution: '🔄' },
+    football: { goal: '⚽', yellow_card: '🟨', red_card: '🟥', substitution: '🔄' },
+    basketball: { goal: '🏀', foul: '⚠️', substitution: '🔄', timeout: '⏸' },
+    volleyball: { goal: '🏐', substitution: '🔄', timeout: '⏸' },
+  };
+  const icons = sportEventIcon[currentSport] || sportEventIcon.football;
   list.innerHTML = [...allMatchEvents].reverse().map(e => `
-    <div class="match-event-item">
-      <div class="event-minute">${e.minute}'</div>
-      <div class="event-icon">${icons[e.type] || '⚽'}</div>
-      <div class="event-desc">${e.type === 'goal' ? `GOAL! ${e.team}` : `${e.type} — ${e.team}`}</div>
+    <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(0,0,0,0.3);border-radius:10px;">
+      <div style="font-size:1.4rem;">${icons[e.type] || '🏆'}</div>
+      <div style="font-weight:900;color:var(--amber);font-family:'Georgia',serif;min-width:32px;">${e.minute}'</div>
+      <div style="color:var(--walnut-cream);font-weight:700;">${e.type === 'goal' ? `GOAL! ${e.team}` : `${e.type} — ${e.team}`}</div>
     </div>`).join('');
 }
 
 // ─── Match Control ─────────────────────────────────────────────────────
 async function matchControl(action) {
-  const res = await fetch('/api/match/control', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action })
-  });
-  const data = await res.json();
-  if (data.success) {
-    const statusEl = document.getElementById('ctrlStatus');
-    if (statusEl) statusEl.innerText = data.data.status.replace(/_/g, ' ').toUpperCase();
-  }
+  try {
+    const res = await fetch('/api/match/control', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, sport: currentSport })
+    });
+    const data = await res.json();
+    if (data.success) {
+      matchState.status = data.data.status;
+      setText('ctrlStatus', data.data.status.replace(/_/g, ' ').toUpperCase());
+      setText('topStatus', data.data.status.replace(/_/g, ' ').toUpperCase());
+      showToast(`✅ Match: ${data.data.status.replace(/_/g, ' ')} — ${sportLabels[currentSport]}`);
+    }
+  } catch (e) {}
 }
 
 // ─── Venue Settings ────────────────────────────────────────────────────
 async function updateVenueSettings() {
   const cap = document.getElementById('settingCapacity')?.value;
-  if (!cap || isNaN(cap) || parseInt(cap) < 1000) {
-    alert('Please enter a valid capacity (minimum 1000).');
-    return;
-  }
+  if (!cap || parseInt(cap) < 1000) { showToast('⚠️ Enter a valid capacity'); return; }
   const res = await fetch('/api/venue/settings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ capacity: parseInt(cap) })
   });
   const data = await res.json();
-  if (data.success) {
-    showToast(`✅ Capacity updated to ${parseInt(cap).toLocaleString('en-IN')}!`);
-  }
+  if (data.success) showToast(`✅ Capacity updated to ${parseInt(cap).toLocaleString('en-IN')}`);
 }
 
 async function createManualAlert() {
   const type = document.getElementById('alertType')?.value || 'info';
   const msg = document.getElementById('alertMessage')?.value;
-  if (!msg) { alert('Please enter an alert message.'); return; }
+  if (!msg) { showToast('⚠️ Enter a message'); return; }
   await fetch('/api/alerts/create', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type, message: msg, source: 'manual' })
   });
-  if (document.getElementById('alertMessage')) document.getElementById('alertMessage').value = '';
-  showToast('✅ Alert broadcast to all connected clients!');
+  const el = document.getElementById('alertMessage');
+  if (el) el.value = '';
+  showToast('✅ Alert broadcast sent!');
+}
+
+// ─── Menu Management ───────────────────────────────────────────────────
+async function fetchMenuItems() {
+  try {
+    const res = await fetch('/api/food/menu');
+    const data = await res.json();
+    menuItems = data.data || [];
+    renderMenuManagement();
+  } catch (e) {}
+}
+
+function renderMenuManagement() {
+  const list = document.getElementById('menuManagementList');
+  if (!list) return;
+  if (!menuItems.length) { list.innerHTML = `<div class="empty-state"><span>🍽️</span><p>No menu items</p></div>`; return; }
+  list.innerHTML = menuItems.map(item => `
+    <div class="menu-mgmt-card">
+      <span class="menu-mgmt-emoji">${item.image || '🍽️'}</span>
+      <div class="menu-mgmt-name">${item.name}</div>
+      <div class="menu-mgmt-price">₹${item.price} · ${item.category} · ${item.prepTime || 5}min</div>
+      <div class="menu-mgmt-actions">
+        <button class="toggle-avail-btn ${item.available ? '' : 'unavail'}" onclick="toggleMenuItem('${item.id}')">
+          ${item.available ? '✅ Available' : '⛔ Unavailable'}
+        </button>
+        <button class="delete-item-btn" onclick="deleteMenuItem('${item.id}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+async function addMenuItem() {
+  const name = document.getElementById('menuItemName')?.value?.trim();
+  const price = document.getElementById('menuItemPrice')?.value;
+  const category = document.getElementById('menuItemCategory')?.value;
+  const prepTime = document.getElementById('menuItemPrepTime')?.value || 5;
+  const image = document.getElementById('menuItemEmoji')?.value?.trim() || '🍽️';
+  if (!name || !price) { showToast('⚠️ Fill name and price'); return; }
+  const res = await fetch('/api/food/menu/add', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, price, category, prepTime, image })
+  });
+  const data = await res.json();
+  if (data.success) {
+    menuItems.push(data.data);
+    renderMenuManagement();
+    ['menuItemName', 'menuItemPrice', 'menuItemPrepTime', 'menuItemEmoji'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    showToast(`✅ "${name}" added`);
+  }
+}
+
+async function toggleMenuItem(id) {
+  const res = await fetch(`/api/food/menu/${id}/toggle`, { method: 'POST' });
+  const data = await res.json();
+  if (data.success) {
+    const item = menuItems.find(m => m.id === id);
+    if (item) item.available = data.data.available;
+    renderMenuManagement();
+    showToast(`${data.data.name}: ${data.data.available ? '✅ Available' : '⛔ Unavailable'}`);
+  }
+}
+
+async function deleteMenuItem(id) {
+  if (!confirm('Remove this item?')) return;
+  const res = await fetch(`/api/food/menu/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.success) {
+    menuItems = menuItems.filter(m => m.id !== id);
+    renderMenuManagement();
+    showToast(`"${data.data.name}" removed`);
+  }
+}
+
+// ─── QR Scanner ────────────────────────────────────────────────────────
+async function startScanner() {
+  const video = document.getElementById('scannerVideo');
+  const placeholder = document.getElementById('scannerPlaceholder');
+  const overlay = document.getElementById('scannerOverlay');
+  const btn = document.getElementById('startScanBtn');
+  const statusEl = document.getElementById('scannerStatus');
+  try {
+    scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = scannerStream;
+    video.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    if (overlay) overlay.style.display = 'block';
+    if (btn) { btn.innerText = '🔴 Scanning...'; btn.disabled = true; }
+    if (statusEl) { statusEl.innerText = '● Scanning'; statusEl.className = 'pill pill-amber'; }
+
+    // jsQR simulation — in production replace with actual jsQR library
+    const canvas = document.getElementById('scannerCanvas');
+    const ctx = canvas.getContext('2d');
+    scannerInterval = setInterval(() => {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        // Real QR: const code = jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data, canvas.width, canvas.height);
+        // if (code) handleQRResult(code.data);
+      }
+    }, 300);
+    showToast('📷 Camera active — use manual entry to confirm pickup');
+  } catch (e) {
+    if (placeholder) placeholder.innerHTML = '<span style="font-size:2rem">🚫</span><span style="color:#f87171">Camera denied</span>';
+    if (statusEl) { statusEl.innerText = 'Denied'; statusEl.className = 'pill pill-red'; }
+    showToast('Camera access denied. Use manual entry below.');
+  }
+}
+
+function stopScanner() {
+  if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+  clearInterval(scannerInterval);
+  const video = document.getElementById('scannerVideo');
+  const placeholder = document.getElementById('scannerPlaceholder');
+  const overlay = document.getElementById('scannerOverlay');
+  const btn = document.getElementById('startScanBtn');
+  const statusEl = document.getElementById('scannerStatus');
+  if (video) video.style.display = 'none';
+  if (placeholder) { placeholder.style.display = 'flex'; placeholder.innerHTML = '<span>📷</span><span>Camera stopped</span>'; }
+  if (overlay) overlay.style.display = 'none';
+  if (btn) { btn.innerText = '📷 Start Camera'; btn.disabled = false; }
+  if (statusEl) { statusEl.innerText = 'Ready'; statusEl.className = 'pill pill-green'; }
+}
+
+async function handleQRResult(code) {
+  const input = document.getElementById('manualQrInput');
+  if (input) { input.value = code; }
+  await scanManualQR();
+}
+
+async function scanManualQR() {
+  const input = document.getElementById('manualQrInput');
+  const qrCode = input?.value?.trim();
+  if (!qrCode) { showToast('⚠️ Enter a pickup code'); return; }
+
+  const resultDiv = document.getElementById('scanResult');
+  resultDiv.style.display = 'block';
+  resultDiv.style.background = 'rgba(255,255,255,0.04)';
+  resultDiv.style.border = '1px solid var(--border-color)';
+  resultDiv.innerHTML = '<span style="color:var(--text-muted)">⏳ Verifying...</span>';
+
+  try {
+    const res = await fetch('/api/orders/scan-pickup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qrCode })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const o = data.data;
+      resultDiv.style.background = 'rgba(5,150,105,0.12)';
+      resultDiv.style.border = '1px solid rgba(5,150,105,0.4)';
+      resultDiv.innerHTML = `
+        <div style="color:var(--emerald);font-weight:900;font-size:1rem;margin-bottom:8px;">✅ Order Delivered!</div>
+        <div style="font-size:0.88rem;color:var(--walnut-cream);line-height:1.8;">
+          <div><strong>Order:</strong> ${o.id}</div>
+          <div><strong>Items:</strong> ${(o.items||[]).map(i=>`${i.name} x${i.qty}`).join(', ')}</div>
+          <div><strong>Seat:</strong> ${o.seat} · ${o.zone?.toUpperCase()}</div>
+          <div><strong>Total:</strong> ₹${o.total}</div>
+        </div>`;
+      if (input) input.value = '';
+      showToast(`✅ ${o.id} delivered!`);
+      // Log recent scan
+      addRecentScan(o.id, '✅ Delivered');
+      fetchOrders();
+    } else {
+      resultDiv.style.background = 'rgba(220,38,38,0.08)';
+      resultDiv.style.border = '1px solid rgba(220,38,38,0.3)';
+      const not_ready = data.data?.status === 'preparing';
+      resultDiv.innerHTML = `
+        <div style="color:var(--red-hot);font-weight:900;margin-bottom:6px;">${not_ready ? '⏳ Not Ready' : '❌ Scan Failed'}</div>
+        <div style="color:var(--walnut-cream);font-size:0.88rem;">${not_ready ? 'Order is still being prepared.' : (data.error || 'Invalid QR code')}</div>`;
+      addRecentScan(qrCode, not_ready ? '⏳ Not Ready' : '❌ Failed');
+      showToast(data.error || 'QR verification failed');
+    }
+  } catch (e) {
+    resultDiv.innerHTML = '<span style="color:var(--red-hot)">❌ Network error. Retry.</span>';
+    showToast('Network error');
+  }
+}
+
+function addRecentScan(id, status) {
+  recentScansLog.unshift({ id, status, time: new Date().toLocaleTimeString('en-IN') });
+  if (recentScansLog.length > 5) recentScansLog.pop();
+  const container = document.getElementById('recentScans');
+  if (!container) return;
+  container.innerHTML = recentScansLog.map(s => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(0,0,0,0.3);border-radius:8px;font-size:0.82rem;">
+      <span style="color:var(--walnut-cream);font-family:'Courier New',monospace;">${s.id}</span>
+      <span>${s.status}</span>
+      <span style="color:var(--text-muted);">${s.time}</span>
+    </div>`).join('');
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -574,11 +970,12 @@ function showToast(msg) {
     toast = document.createElement('div');
     toast.id = 'venueToast';
     toast.style.cssText = `
-      position:fixed; bottom:28px; right:28px; background:#1c2230;
-      border:1px solid rgba(68,147,248,0.4); color:#e6edf3;
-      padding:14px 22px; border-radius:10px; font-size:0.9rem; font-weight:600;
-      box-shadow:0 4px 20px rgba(0,0,0,0.5); z-index:9999;
-      animation:fadeIn 0.3s ease; max-width:320px;
+      position:fixed; bottom:28px; right:28px;
+      background:linear-gradient(135deg,#2e200f,#1c140a);
+      border:1px solid var(--walnut-tan); color:var(--walnut-cream);
+      padding:14px 22px; border-radius:12px; font-size:0.9rem; font-weight:700;
+      box-shadow:0 8px 32px rgba(0,0,0,0.7); z-index:9999;
+      max-width:320px; font-family:'Nunito',sans-serif;
     `;
     document.body.appendChild(toast);
   }
@@ -587,209 +984,3 @@ function showToast(msg) {
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
 }
-
-// ─── Menu Management ───────────────────────────────────────────────────
-let menuItems = [];
-
-async function fetchMenuItems() {
-  try {
-    const res = await fetch('/api/food/menu');
-    const data = await res.json();
-    menuItems = data.data || [];
-    renderMenuManagement();
-  } catch(e) { console.error('fetchMenuItems', e); }
-}
-
-function renderMenuManagement() {
-  const list = document.getElementById('menuManagementList');
-  if (!list) return;
-  if (!menuItems.length) { list.innerHTML = '<div style="color:var(--text-muted)">No menu items yet.</div>'; return; }
-  list.innerHTML = menuItems.map(item => `
-    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:1.5rem">${item.image}</span>
-          <div>
-            <div style="font-weight:600">${item.name}</div>
-            <div style="font-size:0.75rem;color:#9ca3af">${item.category} · ₹${item.price} · ${item.prepTime}min</div>
-          </div>
-        </div>
-        <span style="padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;background:${item.available ? '#10b981' : '#6b7280'};color:#fff">
-          ${item.available ? 'Available' : 'Unavailable'}
-        </span>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <button onclick="toggleMenuItem('${item.id}')" class="btn ${item.available ? 'btn-warning' : 'btn-success'}" style="flex:1;padding:6px;font-size:0.8rem">
-          ${item.available ? '⛔ Mark Unavailable' : '✅ Mark Available'}
-        </button>
-        <button onclick="deleteMenuItem('${item.id}')" class="btn btn-danger" style="padding:6px 12px;font-size:0.8rem">🗑️</button>
-      </div>
-    </div>`).join('');
-}
-
-async function addMenuItem() {
-  const name = document.getElementById('menuItemName')?.value?.trim();
-  const price = document.getElementById('menuItemPrice')?.value;
-  const category = document.getElementById('menuItemCategory')?.value;
-  const prepTime = document.getElementById('menuItemPrepTime')?.value || 5;
-  const image = document.getElementById('menuItemEmoji')?.value?.trim() || '🍽️';
-  if (!name || !price || !category) return showToast('Please fill all required fields');
-
-  const res = await fetch('/api/food/menu/add', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ name, price, category, prepTime, image })
-  });
-  const data = await res.json();
-  if (data.success) {
-    menuItems.push(data.data);
-    renderMenuManagement();
-    // Clear form
-    ['menuItemName','menuItemPrice','menuItemPrepTime','menuItemEmoji'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-    showToast(`✅ "${name}" added to menu`);
-  } else {
-    showToast(data.error || 'Failed to add item');
-  }
-}
-
-async function toggleMenuItem(id) {
-  const res = await fetch(`/api/food/menu/${id}/toggle`, { method:'POST' });
-  const data = await res.json();
-  if (data.success) {
-    const item = menuItems.find(m => m.id === id);
-    if (item) item.available = data.data.available;
-    renderMenuManagement();
-    showToast(`"${data.data.name}" marked ${data.data.available ? 'available' : 'unavailable'}`);
-  }
-}
-
-async function deleteMenuItem(id) {
-  if (!confirm('Remove this item from the menu?')) return;
-  const res = await fetch(`/api/food/menu/${id}`, { method:'DELETE' });
-  const data = await res.json();
-  if (data.success) {
-    menuItems = menuItems.filter(m => m.id !== id);
-    renderMenuManagement();
-    showToast(`"${data.data.name}" removed`);
-  }
-}
-
-// Listen for menu changes from socket (other staff updated menu)
-socket.on('menu_update', updated => {
-  menuItems = updated;
-  renderMenuManagement();
-});
-
-// Fetch menu on load
-fetchMenuItems();
-
-// ─── QR Scanner (Pickup Confirmation) ─────────────────────────────────
-let scannerStream = null;
-let scannerInterval = null;
-
-async function startScanner() {
-  const video = document.getElementById('scannerVideo');
-  const placeholder = document.getElementById('scannerPlaceholder');
-  const overlay = document.getElementById('scannerOverlay');
-  const btn = document.getElementById('startScanBtn');
-
-  try {
-    scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    video.srcObject = scannerStream;
-    video.style.display = 'block';
-    placeholder.style.display = 'none';
-    overlay.style.display = 'block';
-    if (btn) { btn.innerText = '🔴 Camera Active'; btn.disabled = true; }
-
-    // Note: Real QR scanning requires a library like jsQR.
-    // Here we set up the canvas loop to demonstrate the scanning UI.
-    const canvas = document.getElementById('scannerCanvas');
-    const ctx = canvas.getContext('2d');
-    scannerInterval = setInterval(() => {
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        // In production: imageData → jsQR(imageData.data, width, height) → code.data
-      }
-    }, 500);
-    showToast('📷 Camera started. Use manual entry below to confirm orders.');
-  } catch(e) {
-    showToast('Camera access denied. Please use manual entry.');
-    placeholder.innerHTML = '<span style="font-size:2.5rem">🚫</span><span style="color:#ef4444">Camera access denied</span>';
-  }
-}
-
-function stopScanner() {
-  if (scannerStream) {
-    scannerStream.getTracks().forEach(t => t.stop());
-    scannerStream = null;
-  }
-  clearInterval(scannerInterval);
-  const video = document.getElementById('scannerVideo');
-  const placeholder = document.getElementById('scannerPlaceholder');
-  const overlay = document.getElementById('scannerOverlay');
-  const btn = document.getElementById('startScanBtn');
-  if (video) video.style.display = 'none';
-  if (placeholder) { placeholder.style.display = 'flex'; placeholder.innerHTML = '<span style="font-size:3rem">📷</span><span>Camera stopped</span>'; }
-  if (overlay) overlay.style.display = 'none';
-  if (btn) { btn.innerText = '📷 Start Camera'; btn.disabled = false; }
-}
-
-async function scanManualQR() {
-  const input = document.getElementById('manualQrInput');
-  const qrCode = input?.value?.trim();
-  if (!qrCode) return showToast('Please enter a QR / pickup code');
-
-  const resultDiv = document.getElementById('scanResult');
-  resultDiv.style.display = 'block';
-  resultDiv.innerHTML = '<span style="color:#9ca3af">⏳ Verifying...</span>';
-  resultDiv.style.background = 'rgba(255,255,255,0.04)';
-
-  try {
-    const res = await fetch('/api/orders/scan-pickup', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ qrCode })
-    });
-    const data = await res.json();
-
-    if (data.success) {
-      const order = data.data;
-      resultDiv.style.background = 'rgba(16,185,129,0.1)';
-      resultDiv.style.border = '1px solid rgba(16,185,129,0.4)';
-      resultDiv.innerHTML = `
-        <div style="color:#10b981;font-weight:700;font-size:1.1rem;margin-bottom:8px">✅ Order Confirmed & Delivered</div>
-        <div style="color:#d1d5db;font-size:0.9rem">
-          <div><strong>Order:</strong> ${order.id}</div>
-          <div><strong>Items:</strong> ${(order.items||[]).map(i=>`${i.name} x${i.qty}`).join(', ')}</div>
-          <div><strong>Seat:</strong> ${order.seat} · ${order.zone?.toUpperCase()}</div>
-          <div><strong>Total:</strong> ₹${order.total}</div>
-          <div style="margin-top:6px;color:#10b981">${data.message || 'Delivered!'}</div>
-        </div>`;
-      if (input) input.value = '';
-      showToast(`✅ Order ${order.id} delivered!`);
-      // Refresh orders panel in background
-      fetchOrders();
-    } else {
-      resultDiv.style.background = 'rgba(239,68,68,0.08)';
-      resultDiv.style.border = '1px solid rgba(239,68,68,0.3)';
-      const preparing = data.data?.status === 'preparing';
-      resultDiv.innerHTML = `
-        <div style="color:#ef4444;font-weight:700;margin-bottom:6px">
-          ${preparing ? '⏳ Not Ready Yet' : '❌ Scan Failed'}
-        </div>
-        <div style="color:#d1d5db;font-size:0.9rem">
-          ${preparing
-            ? `Order <strong>${data.data.id}</strong> is still being prepared. Ask attendee to wait.`
-            : (data.error || 'Invalid or unknown QR code.')}
-        </div>`;
-      showToast(data.error || 'QR verification failed');
-    }
-  } catch(e) {
-    resultDiv.innerHTML = '<span style="color:#ef4444">Network error. Please retry.</span>';
-    showToast('Network error');
-  }
-}
-

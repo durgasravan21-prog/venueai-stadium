@@ -442,6 +442,32 @@ app.post('/api/match/control', (req, res) => {
   res.json({ success: true, data: matchState });
 });
 
+// MANUAL SCORE PUSH — admin sets exact score, broadcasts to all attendees
+app.post('/api/match/score', (req, res) => {
+  const { homeScore, awayScore, sport } = req.body;
+  if (homeScore !== undefined) matchState.homeScore = parseInt(homeScore);
+  if (awayScore !== undefined) matchState.awayScore = parseInt(awayScore);
+  if (sport) matchState.sport = sport;
+  const icon = sport === 'cricket' ? '🏏' : sport === 'basketball' ? '🏀' : sport === 'volleyball' ? '🏐' : '⚽';
+  if (homeScore !== awayScore || homeScore > 0) {
+    addAlert('success', `${icon} Score Update — ${matchState.homeTeam} ${matchState.homeScore} : ${matchState.awayScore} ${matchState.awayTeam}`, 'match');
+  }
+  io.emit('match_update', matchState);
+  res.json({ success: true, data: matchState });
+});
+
+// MATCH CONFIG — update team names, sport, stadium
+app.post('/api/match/config', (req, res) => {
+  const { teamA, teamB, sport, stadium } = req.body;
+  if (teamA) matchState.homeTeam = teamA;
+  if (teamB) matchState.awayTeam = teamB;
+  if (sport) matchState.sport = sport;
+  if (stadium) matchState.stadium = stadium;
+  io.emit('match_update', matchState);
+  addAlert('info', `🏟️ Match configured: ${matchState.homeTeam} vs ${matchState.awayTeam} (${(sport||'football').toUpperCase()})`, 'system');
+  res.json({ success: true, data: matchState });
+});
+
 // --- Entry Slots ---
 app.get('/api/entry/slots', (req, res) => {
   res.json({ success: true, data: entrySlots });
