@@ -614,6 +614,29 @@ app.get('/api/staff', (req, res) => {
   res.json({ success: true, data: staff });
 });
 
+app.post('/api/staff/add', (req, res) => {
+  const { name, role, zone } = req.body;
+  if (!name || !role) return res.status(400).json({ success: false, error: 'Name and role required' });
+  
+  const newStaff = {
+    id: 'S' + Math.floor(Math.random() * 10000).toString().padStart(4, '0'),
+    name, role, zone: zone || 'unassigned', status: 'available', currentTask: null
+  };
+  staff.push(newStaff);
+  
+  io.emit('staff_update', newStaff); // Update all clients
+  res.json({ success: true, data: newStaff });
+});
+
+app.delete('/api/staff/:id', (req, res) => {
+  const idx = staff.findIndex(st => st.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ success: false, error: 'Staff not found' });
+  
+  staff.splice(idx, 1);
+  io.emit('staff_removed', req.params.id);
+  res.json({ success: true });
+});
+
 app.post('/api/staff/:id/dispatch', (req, res) => {
   const s = staff.find(st => st.id === req.params.id);
   if (!s) return res.status(404).json({ success: false, error: 'Staff not found' });

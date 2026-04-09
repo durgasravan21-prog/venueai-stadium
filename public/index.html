@@ -3,142 +3,91 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="VenueAI — Smart Stadium Experience. Book entry, order food, navigate with AI, all in one place.">
+  <meta name="description" content="VenueAI — Smart Stadium Experience. Book entry, order food, navigate with AI.">
   <title>VenueAI — Smart Stadium Experience</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/attendee.css">
-  <style>
-    /* ── Demo Payment Modal ── */
-    #demoPayModal { position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s; }
-    #demoPayModal.visible { opacity:1; }
-    .demo-pay-backdrop { position:absolute;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px); }
-    .demo-pay-card {
-      position:relative;background:#1a1a2e;border:1px solid rgba(255,255,255,0.12);
-      border-radius:20px;padding:28px 24px;width:min(420px,95vw);max-height:90vh;overflow-y:auto;
-      box-shadow:0 20px 60px rgba(0,0,0,0.6);animation:slideUp 0.3s ease;
-    }
-    @keyframes slideUp { from{transform:translateY(30px);opacity:0} to{transform:translateY(0);opacity:1} }
-    .demo-pay-header { text-align:center;margin-bottom:20px; }
-    .demo-pay-logo { font-size:2.5rem;margin-bottom:8px; }
-    .demo-pay-header h2 { margin:0;font-size:1.4rem;color:#fff; }
-    .demo-pay-amount { text-align:center;font-size:2.2rem;font-weight:800;color:#6366f1;margin:16px 0; }
-    .demo-pay-items { background:rgba(255,255,255,0.05);border-radius:12px;padding:12px;margin-bottom:16px; }
-    .demo-pay-item { display:flex;justify-content:space-between;color:#d1d5db;font-size:0.9rem;padding:4px 0; }
-    .demo-pay-label { font-size:0.8rem;color:#9ca3af;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em; }
-    .demo-pay-method-grid { display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px; }
-    .demo-method-btn { padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#fff;cursor:pointer;font-size:0.85rem;transition:all 0.2s; }
-    .demo-method-btn.active,.demo-method-btn:hover { background:#6366f1;border-color:#6366f1; }
-    .demo-pay-input { width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#fff;font-size:0.9rem;margin-bottom:12px;box-sizing:border-box; }
-    .demo-pay-confirm-btn { width:100%;padding:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;transition:all 0.2s; }
-    .demo-pay-confirm-btn:hover { transform:translateY(-1px);box-shadow:0 8px 24px rgba(99,102,241,0.5); }
-    .demo-pay-footer { display:flex;justify-content:space-between;margin-top:14px;font-size:0.75rem;color:#6b7280; }
-
-    /* ── Route Cards ── */
-    .route-badge { display:inline-block;padding:4px 10px;background:#10b981;border-radius:20px;font-size:0.75rem;font-weight:600;color:#fff;margin-bottom:12px; }
-    .route-steps { margin-bottom:12px; }
-    .route-step { display:flex;align-items:center;gap:10px;padding:8px 0; }
-    .route-step-num { width:26px;height:26px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0; }
-    .route-connector { width:2px;height:12px;background:rgba(255,255,255,0.15);margin-left:12px; }
-    .route-meta { display:flex;gap:16px;font-size:0.8rem;color:#9ca3af;flex-wrap:wrap; }
-    .route-alt-card { background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px;margin-bottom:10px; }
-    /* ── Gate Status Grid ── */
-    .gate-status-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:10px; }
-    .gate-status-card { background:rgba(255,255,255,0.05);border-radius:12px;padding:12px;text-align:center;border:1px solid rgba(255,255,255,0.08); }
-    .gate-status-card.gate-busy { border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.06); }
-    .gate-status-card.gate-ok  { border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.04); }
-    .gate-status-name { display:block;font-weight:700;font-size:1rem;margin-bottom:4px; }
-    .gate-status-q    { display:block;font-size:0.75rem;color:#9ca3af;margin-bottom:4px; }
-    .gate-status-dot  { display:block;font-size:0.75rem; }
-    /* ── Order QR row ── */
-    .order-qr-row { display:flex;gap:12px;align-items:center;background:rgba(255,255,255,0.04);border-radius:10px;padding:10px;margin-top:10px; }
-    .order-qr-text { flex:1; }
-    .order-card-top { display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px; }
-    .order-items-summary { font-size:0.8rem;color:#9ca3af;margin-top:4px; }
-    .order-status-badge { padding:4px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;white-space:nowrap; }
-    .order-meta { display:flex;flex-wrap:wrap;gap:10px;font-size:0.8rem;color:#9ca3af; }
-    .order-id { font-weight:700;font-size:0.95rem; }
-    /* ── Cart enhancements ── */
-    .cart-item { display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06); }
-    /* ── Menu unavailable ── */
-    .menu-item.unavailable { cursor:not-allowed;opacity:0.6; }
-    /* ── AI CCTV ── */
-    .ai-bbox { position:absolute;border:2px solid #10b981;border-radius:4px;width:45px;height:90px;transition:all 1.5s ease;pointer-events:none; }
-    /* ── Nav Find btn ── */
-    .nav-find-btn { width:100%;padding:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-top:6px;transition:all 0.2s; }
-    .nav-find-btn:hover { transform:translateY(-1px);box-shadow:0 6px 16px rgba(99,102,241,0.4); }
-    /* ── Food zone + category ── */
-    .food-zone-select { margin-bottom:16px; }
-    .food-zone-select label { font-size:0.85rem;color:#9ca3af;display:block;margin-bottom:6px; }
-    .food-zone-select select { width:100%;padding:10px 12px;background:#1e293b;border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:10px;font-size:0.9rem; }
-    .food-categories { display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px; }
-  </style>
 </head>
 <body>
+
 <div id="app">
 
-  <!-- ── Hero ── -->
-  <section id="hero" class="hero">
+  <!-- ══ HERO ══ -->
+  <section class="hero">
     <div class="hero-bg"></div>
     <div class="hero-content">
       <div class="hero-badge">🏟️ LIVE NOW</div>
-      <h1>MetaStadium <span class="gradient-text">Arena</span></h1>
+      <h1 id="heroTitle">VenueAI <span class="gradient-text">Stadium</span></h1>
       <p class="hero-subtitle">Your AI-powered stadium companion</p>
-      <div class="match-card" id="matchCard">
+
+      <!-- Match Card -->
+      <div class="match-card">
         <div class="match-teams">
-          <div class="team"><div class="team-icon">🔵</div><span class="team-name">Metro United</span></div>
-          <div class="match-score">
-            <span id="homeScore">0</span><span class="score-divider">:</span><span id="awayScore">0</span>
+          <div class="team">
+            <div class="team-icon" id="heroIconA">🔵</div>
+            <span class="team-name" id="heroTeamA">Metro United</span>
           </div>
-          <div class="team"><div class="team-icon">🔴</div><span class="team-name">City Strikers</span></div>
+          <div class="match-score-block">
+            <div class="match-score">
+              <span id="homeScore">0</span>
+              <span class="score-sep">:</span>
+              <span id="awayScore">0</span>
+            </div>
+            <div class="match-status" id="matchStatus">PRE-MATCH</div>
+            <div class="match-minute" id="matchMinute"></div>
+          </div>
+          <div class="team">
+            <div class="team-icon" id="heroIconB">🔴</div>
+            <span class="team-name" id="heroTeamB">City Strikers</span>
+          </div>
         </div>
-        <div class="match-status" id="matchStatus">Pre-Match</div>
-        <div class="match-minute" id="matchMinute"></div>
       </div>
+
       <div class="hero-actions">
-        <button class="btn btn-primary btn-glow" onclick="switchTab('entry')"><span>🎫</span> Book Entry Slot</button>
-        <button class="btn btn-secondary"        onclick="switchTab('food')"><span>🍔</span> Order Food</button>
+        <button class="hero-btn primary" onclick="switchTab('entry')">🎫 Book Entry Slot</button>
+        <button class="hero-btn secondary" onclick="switchTab('food')">🍔 Order Food</button>
       </div>
     </div>
-    <div class="scroll-indicator"><div class="scroll-arrow"></div></div>
   </section>
 
-  <!-- ── Live Bar ── -->
-  <section class="live-bar">
+  <!-- ══ LIVE BAR ══ -->
+  <div class="live-bar">
     <div class="live-bar-inner">
       <div class="live-stat"><span class="live-dot"></span><span>Attendance: <strong id="liveAttendance">0</strong></span></div>
-      <div class="live-stat"><span>⏱️</span><span>Avg Wait: <strong id="liveWait">0 min</strong></span></div>
+      <div class="live-stat"><span>⏱️</span><span>Wait: <strong id="liveWait">— min</strong></span></div>
       <div class="live-stat"><span>🚪</span><span>Best Gate: <strong id="bestGate">—</strong></span></div>
+      <div class="live-stat"><span>🌤️</span><span id="heroWeather">Loading...</span></div>
     </div>
-  </section>
+  </div>
 
-  <!-- ── Tab Nav ── -->
-  <nav class="tab-nav" id="tabNav">
-    <button class="tab-btn active" data-tab="venue"    onclick="switchTab('venue')">   <span class="tab-icon">🗺️</span><span>Venue</span></button>
-    <button class="tab-btn"        data-tab="entry"    onclick="switchTab('entry')">   <span class="tab-icon">🎫</span><span>Entry</span></button>
-    <button class="tab-btn"        data-tab="food"     onclick="switchTab('food')">    <span class="tab-icon">🍔</span><span>Food</span></button>
-    <button class="tab-btn"        data-tab="navigate" onclick="switchTab('navigate')"><span class="tab-icon">🧭</span><span>Navigate</span></button>
-    <button class="tab-btn"        data-tab="myorders" onclick="switchTab('myorders')"><span class="tab-icon">📋</span><span>Orders</span></button>
+  <!-- ══ TAB NAV ══ -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="venue"    onclick="switchTab('venue')">   <span>🗺️</span><span>Venue</span></button>
+    <button class="tab-btn"        data-tab="entry"    onclick="switchTab('entry')">   <span>🎫</span><span>Entry</span></button>
+    <button class="tab-btn"        data-tab="food"     onclick="switchTab('food')">    <span>🍔</span><span>Food</span></button>
+    <button class="tab-btn"        data-tab="navigate" onclick="switchTab('navigate')"><span>🧭</span><span>Navigate</span></button>
+    <button class="tab-btn"        data-tab="myorders" onclick="switchTab('myorders')"><span>📋</span><span>Orders</span></button>
   </nav>
 
-  <!-- ── Tab Content ── -->
+  <!-- ══ CONTENT ══ -->
   <main class="tab-content">
 
     <!-- VENUE TAB -->
     <section id="tab-venue" class="tab-panel active">
-      <h2 class="section-title">Live Venue Map</h2>
-      <div class="venue-map" id="venueMap">
+      <h2 class="section-title">🗺️ Live Venue Map</h2>
+      <div class="venue-map-wrap">
         <svg viewBox="0 0 600 500" class="stadium-svg">
-          <ellipse cx="300" cy="250" rx="270" ry="210" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
-          <rect x="150" y="140" width="300" height="220" rx="10" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" stroke-width="1.5"/>
-          <line x1="300" y1="140" x2="300" y2="360" stroke="rgba(34,197,94,0.3)" stroke-width="1"/>
-          <circle cx="300" cy="250" r="40" fill="none" stroke="rgba(34,197,94,0.3)" stroke-width="1"/>
+          <ellipse cx="300" cy="250" rx="270" ry="210" fill="none" stroke="rgba(201,151,58,0.2)" stroke-width="2"/>
+          <rect x="150" y="140" width="300" height="220" rx="10" fill="rgba(26,74,46,0.25)" stroke="rgba(45,122,79,0.6)" stroke-width="1.5"/>
+          <line x1="300" y1="140" x2="300" y2="360" stroke="rgba(45,122,79,0.4)" stroke-width="1"/>
+          <circle cx="300" cy="250" r="40" fill="none" stroke="rgba(45,122,79,0.4)" stroke-width="1"/>
           <path id="zone-north" d="M 120,60 Q 300,20 480,60 L 460,130 Q 300,100 140,130 Z" class="zone-path" data-zone="north"/>
           <path id="zone-south" d="M 120,440 Q 300,480 480,440 L 460,370 Q 300,400 140,370 Z" class="zone-path" data-zone="south"/>
           <path id="zone-east"  d="M 490,70 Q 560,250 490,430 L 465,370 Q 510,250 465,130 Z" class="zone-path" data-zone="east"/>
           <path id="zone-west"  d="M 110,70 Q 40,250 110,430 L 135,370 Q 90,250 135,130 Z" class="zone-path" data-zone="west"/>
           <ellipse id="zone-vip" cx="300" cy="250" rx="45" ry="35" class="zone-path" data-zone="vip"/>
-          <text x="300" y="85"  text-anchor="middle" class="zone-label">North Stand</text>
-          <text x="300" y="425" text-anchor="middle" class="zone-label">South Stand</text>
+          <text x="300" y="82"  text-anchor="middle" class="zone-label">North Stand</text>
+          <text x="300" y="428" text-anchor="middle" class="zone-label">South Stand</text>
           <text x="535" y="255" text-anchor="middle" class="zone-label">East</text>
           <text x="65"  y="255" text-anchor="middle" class="zone-label">West</text>
           <text x="300" y="255" text-anchor="middle" class="zone-label">VIP</text>
@@ -155,23 +104,20 @@
       <div class="zone-cards" id="zoneCards"></div>
 
       <!-- AI Queue Vision -->
-      <h2 class="section-title" style="margin-top:2rem">🤖 AI Queue Vision</h2>
-      <p class="section-desc">Our system uses live computer vision to monitor crowd density at every entry gate in real-time.</p>
-      <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;overflow:hidden;margin-bottom:1.5rem;">
-        <div style="position:relative;width:100%;height:200px;background:#000;">
-          <video autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;opacity:0.6">
+      <h2 class="section-title" style="margin-top:2rem">🤖 AI Gate Vision</h2>
+      <div class="ai-cctv-card">
+        <div class="ai-cctv-video">
+          <video autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;opacity:0.7">
             <source src="https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4">
           </video>
           <div class="ai-bbox" style="top:30%;left:25%"></div>
           <div class="ai-bbox" style="top:20%;left:55%"></div>
-          <div class="ai-bbox" style="top:40%;left:70%"></div>
-          <div style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.8);color:#fff;padding:5px 10px;border-radius:5px;font-size:0.8rem;font-family:monospace;">
-            <span style="color:#10b981">●</span> Live | Confidence: <span id="aiConfidence">97.3%</span>
-          </div>
+          <div class="ai-bbox" style="top:40%;left:68%"></div>
+          <div class="ai-overlay-badge"><span style="color:#10b981">●</span> Live | AI: <span id="aiConfidence">97.3%</span></div>
         </div>
-        <div style="padding:14px;display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:600">Gate A — North Entrance</span>
-          <span style="font-size:0.85rem;padding:4px 12px;background:#10b981;color:#fff;border-radius:20px">Queue: Short</span>
+        <div class="ai-cctv-footer">
+          <span>Gate A — North Entrance</span>
+          <span class="queue-badge short">● Short Queue</span>
         </div>
       </div>
 
@@ -182,38 +128,52 @@
 
     <!-- ENTRY TAB -->
     <section id="tab-entry" class="tab-panel">
-      <h2 class="section-title">Book Your Entry Slot</h2>
-      <p class="section-desc">Skip the crowds! Pick a 15-minute entry window and walk right in.</p>
+      <h2 class="section-title">🎫 Book Your Entry Slot</h2>
+      <p class="section-desc">Skip the queues! Pick a 15-minute entry window and walk right in.</p>
       <div class="social-proof">
-        <span class="social-proof-icon">📊</span>
+        <span>📊</span>
         <span>78% of fans use staggered entry — average wait drops to <strong>2 min</strong></span>
       </div>
-      <div class="slots-grid" id="slotsGrid"></div>
-      <div class="ticket-display" id="ticketDisplay" style="display:none;">
+      <div class="slots-grid" id="slotsGrid">
+        <div class="slot-loading">⏳ Loading slots...</div>
+      </div>
+
+      <!-- Ticket display (hidden until booked) -->
+      <div id="ticketDisplay" style="display:none;">
         <div class="ticket-card">
-          <div class="ticket-header"><span class="ticket-icon">🎫</span><span>Your Entry Pass</span></div>
+          <div class="ticket-header">
+            <span class="ticket-icon">🎫</span>
+            <span>Your Entry Pass</span>
+          </div>
           <div class="ticket-body">
-            <div class="ticket-row"><span class="ticket-label">Time Window</span><span class="ticket-value" id="ticketTime">—</span></div>
-            <div class="ticket-row"><span class="ticket-label">Assigned Gate</span><span class="ticket-value" id="ticketGate">—</span></div>
-            <div class="ticket-row" style="flex-direction:column;align-items:center;gap:10px;margin-top:16px;">
-              <span class="ticket-label">Scan at Gate</span>
-              <img id="ticketQR" src="" alt="Entry QR Code" style="width:160px;height:160px;border-radius:10px;border:4px solid #fff;"/>
-              <span id="ticketQRText" style="font-family:monospace;font-size:0.78rem;color:var(--text-muted)"></span>
+            <div class="ticket-row">
+              <span class="ticket-label">Time Window</span>
+              <span class="ticket-value" id="ticketTime">—</span>
+            </div>
+            <div class="ticket-row">
+              <span class="ticket-label">Assigned Gate</span>
+              <span class="ticket-value" id="ticketGate">—</span>
+            </div>
+            <div class="ticket-qr-block">
+              <img id="ticketQR" src="" alt="Entry QR Code" class="ticket-qr-img"/>
+              <span id="ticketQRText" class="ticket-qr-text"></span>
             </div>
           </div>
-          <div class="ticket-footer"><span>Show this QR at your assigned gate</span></div>
+          <div class="ticket-footer">Scan this QR at your assigned gate</div>
+          <button class="btn-secondary-small" onclick="resetBooking()">Book Different Slot</button>
         </div>
       </div>
     </section>
 
     <!-- FOOD TAB -->
     <section id="tab-food" class="tab-panel">
-      <h2 class="section-title">Order From Your Seat</h2>
-      <p class="section-desc">No queues. No missing the game. Delivered to your section. Pay securely via Razorpay.</p>
+      <h2 class="section-title">🍔 Order From Your Seat</h2>
+      <p class="section-desc">No queues. No missing the game. Delivered to your section.</p>
 
-      <div class="food-zone-select">
-        <label>Your Zone:</label>
-        <select id="foodZone">
+      <!-- Zone select -->
+      <div class="field-group">
+        <label class="field-label">Your Zone</label>
+        <select id="foodZone" class="field-select">
           <option value="north">North Stand</option>
           <option value="south">South Stand</option>
           <option value="east">East Wing</option>
@@ -222,29 +182,31 @@
         </select>
       </div>
 
-      <div class="food-categories">
-        <button class="food-cat-btn active" onclick="filterMenu('all')">All</button>
-        <button class="food-cat-btn" onclick="filterMenu('food')">🍔 Food</button>
-        <button class="food-cat-btn" onclick="filterMenu('beverage')">🥤 Drinks</button>
-        <button class="food-cat-btn" onclick="filterMenu('dessert')">🍦 Dessert</button>
+      <!-- Category filter -->
+      <div class="cat-filter">
+        <button class="cat-btn active" onclick="filterMenu('all',this)">All</button>
+        <button class="cat-btn" onclick="filterMenu('food',this)">🍔 Food</button>
+        <button class="cat-btn" onclick="filterMenu('beverage',this)">🥤 Drinks</button>
+        <button class="cat-btn" onclick="filterMenu('dessert',this)">🍦 Dessert</button>
       </div>
 
-      <div class="menu-grid" id="menuGrid"></div>
+      <!-- Menu grid -->
+      <div class="menu-grid" id="menuGrid"><div class="slot-loading">⏳ Loading menu...</div></div>
 
       <!-- Cart -->
-      <div class="cart-container" id="cartContainer" style="display:none;">
-        <div class="cart-header" onclick="toggleCart()">
-          <span>🛒 Cart (<span id="cartCount">0</span>)</span>
-          <span class="cart-total">₹<span id="cartTotal">0</span></span>
+      <div class="cart-bar" id="cartBar" style="display:none;">
+        <div class="cart-bar-inner" onclick="toggleCart()">
+          <span>🛒 Cart (<span id="cartCount">0</span> items)</span>
+          <span class="cart-total-pill">₹<span id="cartTotal">0</span></span>
         </div>
-        <div class="cart-body" id="cartBody" style="display:none;">
-          <div class="cart-items" id="cartItems"></div>
-          <div class="cart-seat">
-            <label>Seat / Section:</label>
-            <input type="text" id="seatInput" placeholder="e.g. N-14, Row 5"/>
+        <div class="cart-dropdown" id="cartDropdown" style="display:none;">
+          <div id="cartItems"></div>
+          <div class="field-group" style="margin-top:10px;">
+            <label class="field-label">Seat / Section</label>
+            <input type="text" id="seatInput" class="field-input" placeholder="e.g. N-14, Row 5">
           </div>
-          <button id="placeOrderBtn" class="btn btn-primary btn-full" onclick="placeOrder()">
-            💳 Pay & Order via Razorpay
+          <button id="placeOrderBtn" class="checkout-btn" onclick="placeOrder()">
+            💳 Confirm Order (Demo Pay)
           </button>
         </div>
       </div>
@@ -253,42 +215,35 @@
     <!-- NAVIGATE TAB -->
     <section id="tab-navigate" class="tab-panel">
       <h2 class="section-title">🧭 Smart Navigation</h2>
-      <p class="section-desc">AI-powered routing adapts to real-time crowd flow to get you there fastest.</p>
+      <p class="section-desc">AI-powered routing adapts to live crowd flow.</p>
 
-      <div class="nav-form">
-        <div class="nav-input-group">
-          <label style="font-size:0.85rem;color:#9ca3af;display:block;margin-bottom:6px">Where do you want to go?</label>
-          <select id="navDestination" style="width:100%;padding:12px;background:#1e293b;border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:10px;font-size:0.95rem;">
-            <option value="seat">🪑 My Seat</option>
-            <option value="food">🍔 Nearest Food Stand</option>
-            <option value="restroom">🚻 Nearest Restroom</option>
-            <option value="exit">🚪 Nearest Exit</option>
-            <option value="medical">🏥 Medical Station</option>
-            <option value="merch">🛍️ Merchandise Store</option>
-          </select>
-        </div>
-        <button class="nav-find-btn" onclick="getRoute()">🧭 Find Best Route</button>
+      <div class="nav-card">
+        <label class="field-label">Where do you want to go?</label>
+        <select id="navDestination" class="field-select" style="margin-top:8px;">
+          <option value="seat">🪑 My Seat</option>
+          <option value="food">🍔 Nearest Food Stand</option>
+          <option value="restroom">🚻 Nearest Restroom</option>
+          <option value="exit">🚪 Nearest Exit</option>
+          <option value="medical">🏥 Medical Station</option>
+          <option value="merch">🛍️ Merchandise Store</option>
+        </select>
+        <button class="nav-btn" onclick="getRoute()">🧭 Find Best Route</button>
       </div>
 
-      <div class="route-results card" id="routeResults" style="display:none;margin-top:20px;padding:16px;">
-        <h3 style="margin:0 0 12px">Recommended Route</h3>
-        <div class="route-card recommended" id="recommendedRoute"></div>
-        <h3 style="margin:16px 0 8px">Alternatives</h3>
-        <div id="altRoutes"></div>
-      </div>
+      <div id="routeResults" style="display:none;margin-top:16px;"></div>
 
-      <h3 class="section-title" style="margin-top:2rem">🚪 Gate Status</h3>
-      <div class="gate-status-grid" id="gateStatusGrid"></div>
+      <h3 class="section-title" style="margin-top:1.5rem;">🚪 Gate Status</h3>
+      <div class="gate-grid" id="gateStatusGrid"></div>
     </section>
 
     <!-- MY ORDERS TAB -->
     <section id="tab-myorders" class="tab-panel">
-      <h2 class="section-title">My Orders</h2>
-      <p class="section-desc" style="margin-bottom:1rem">Your order QR code below is for staff to scan at pickup — only scan after paying.</p>
-      <div class="orders-list" id="myOrdersList">
+      <h2 class="section-title">📋 My Orders</h2>
+      <p class="section-desc">Show the QR below to staff at the pickup counter.</p>
+      <div id="myOrdersList">
         <div class="empty-state">
-          <span class="empty-icon">📋</span>
-          <p>No orders yet. Head to the Food tab to order!</p>
+          <span>📋</span>
+          <p>No orders yet — go to Food tab!</p>
         </div>
       </div>
     </section>
@@ -296,8 +251,6 @@
   </main>
 </div>
 
-<!-- Razorpay SDK (loaded async, only used when real keys configured) -->
-<script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/js/attendee.js"></script>
 </body>

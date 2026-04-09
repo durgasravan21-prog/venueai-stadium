@@ -568,9 +568,12 @@ function renderStaffGrid() {
       </div>
       <div class="staff-location">📍 ${s.zone?.replace('_', ' ').toUpperCase() || 'Unassigned'}</div>
       ${s.currentTask ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">▶ ${s.currentTask}</div>` : ''}
-      <button class="dispatch-btn" onclick="${s.status === 'available' ? `dispatchStaff('${s.id}')` : `releaseStaff('${s.id}')`}">
-        ${s.status === 'available' ? '🚀 Dispatch' : '✅ Release'}
-      </button>
+      <div style="display:flex; gap:8px;">
+        <button class="dispatch-btn" onclick="${s.status === 'available' ? `dispatchStaff('${s.id}')` : `releaseStaff('${s.id}')`}" style="flex:1;">
+          ${s.status === 'available' ? '🚀 Dispatch' : '✅ Release'}
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteStaff('${s.id}')" style="padding:6px 10px;">🗑</button>
+      </div>
     </div>`).join('');
 }
 
@@ -581,6 +584,27 @@ function filterStaff(role) {
     if (b.getAttribute('onclick') === `filterStaff('${role}')`) b.classList.add('active');
   });
   renderStaffGrid();
+}
+
+async function addStaff() {
+  const name = document.getElementById('newStaffName').value;
+  const role = document.getElementById('newStaffRole').value;
+  const zone = document.getElementById('newStaffZone').value;
+  if (!name) { showToast('⚠️ Enter staff name'); return; }
+  await fetch('/api/staff/add', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, role, zone })
+  });
+  document.getElementById('newStaffName').value = '';
+  showToast('✅ Staff added');
+  fetchStaff();
+}
+
+async function deleteStaff(id) {
+  if (!confirm('Remove this staff member?')) return;
+  await fetch(`/api/staff/${id}`, { method: 'DELETE' });
+  showToast('🗑 Staff removed');
+  fetchStaff();
 }
 
 async function dispatchStaff(id) {

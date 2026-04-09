@@ -1,314 +1,340 @@
 /**
- * VenueAI Attendee App — Full Client Logic
- * Handles: navigation tabs, live socket updates, food ordering → Razorpay,
- *          entry slot booking, gate navigation routing, order QR display.
+ * VenueAI Attendee App — Full Client JS
+ * Fixed: slot booking, food ordering (demo mode), match score sync,
+ *        navigation routing, CCTV animation, real-time socket updates
  */
 
 const socket = io();
 
-// ── State ──────────────────────────────────────────────────────────────
-let currentTab = 'venue';
-let myOrders   = [];
-let cart       = [];
-let fullMenu   = [];
-let venueState = null;
+let currentTab  = 'venue';
+let myOrders    = [];
+let cart        = [];
+let fullMenu    = [];
+let venueState  = null;
+let isCartOpen  = false;
 
-// ── Boot ───────────────────────────────────────────────────────────────
+// ── Boot ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   fetchMenu();
   fetchSlots();
-  checkExistingBooking();
-  populateGateStatus();
-  setInterval(tickOrders, 1000);
-  setInterval(animateCameraBoxes, 2000);
+  restoreBooking();
+  restoreOrders();
+  setInterval(tickETAs, 1000);
+  setInterval(animateBboxes, 1800);
+  fetchWeather();
 });
 
-// ── Live clock for orders ──────────────────────────────────────────────
-function tickOrders() {
+// ── Restore from localStorage ─────────────────────────────────
+function restoreBooking() {
+  const b = localStorage.getItem('venue_booking');
+  if (b) showTicket(JSON.parse(b));
+}
+function restoreOrders() {
+  const o = localStorage.getItem('my_orders');
+  if (o) { myOrders = JSON.parse(o); renderMyOrders(); }
+}
+function saveOrders() { localStorage.setItem('my_orders', JSON.stringify(myOrders)); }
+
+// ── Countdown on orders ───────────────────────────────────────
+function tickETAs() {
   let changed = false;
   myOrders.forEach(o => {
-    if (o.status === 'preparing' && o.remainingTime > 0) {
-      o.remainingTime--;
-      changed = true;
-    }
+    if (o.status === 'preparing' && o.remainingTime > 0) { o.remainingTime--; changed = true; }
   });
   if (changed) renderMyOrders();
 }
 
-// ── Existing booking restore ───────────────────────────────────────────
-function checkExistingBooking() {
-  const saved = localStorage.getItem('venue_booking');
-  if (saved) renderTicket(JSON.parse(saved));
-}
-
-function renderTicket(d) {
-  const grid = document.getElementById('slotsGrid');
-  if (grid) grid.style.display = 'none';
-  const display = document.getElementById('ticketDisplay');
-  if (!display) return;
-  display.style.display = 'block';
-  document.getElementById('ticketTime').innerText = d.timeWindow;
-  document.getElementById('ticketGate').innerText = 'Gate ' + d.gate;
-  document.getElementById('ticketQRText').innerText = d.qrCode;
-  document.getElementById('ticketQR').src =
-    `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(d.qrCode)}`;
-}
-
-// ── Socket events ──────────────────────────────────────────────────────
+// ── Socket events ─────────────────────────────────────────────
 socket.on('venue_update', data => {
   venueState = data;
-  const att = document.getElementById('liveAttendance');
-  if (att) att.innerText = data.totalAttendance.toLocaleString();
-  const avgWait = data.concessions.reduce((a, c) => a + c.queue_time, 0) / data.concessions.length;
-  const lw = document.getElementById('liveWait');
-  if (lw) lw.innerText = avgWait.toFixed(1) + ' min';
-
-  // Best gate
-  const best = [...data.gates].sort((a, b) => a.queue_length - b.queue_length)[0];
-  const bg = document.getElementById('bestGate');
-  if (bg && best) bg.innerText = best.name;
-
-  // Zone cards + map
-  const container = document.getElementById('zoneCards');
-  if (container) {
-    container.innerHTML = data.zones.map(zone => {
-      const pct = Math.min(100, (zone.current / zone.capacity) * 100).toFixed(0);
-      const col = pct > 85 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#10b981';
-      const zp = document.getElementById(`zone-${zone.id}`);
-      if (zp) zp.className.baseVal = `zone-path ${pct > 80 ? 'hot' : pct > 50 ? 'warm' : 'cool'}`;
-      return `<div class="zone-card">
-        <div class="zone-card-name">${zone.name}</div>
-        <div class="zone-card-count">${zone.current.toLocaleString()}</div>
-        <div class="zone-card-bar"><div class="zone-card-fill" style="width:${pct}%;background:${col}"></div></div>
-      </div>`;
-    }).join('');
-  }
-
-  // Gate dots
-  data.gates.forEach(gate => {
-    const dot = document.getElementById(`gate-${gate.id}`);
-    if (dot) dot.classList.toggle('busy', gate.queue_length > 50);
-  });
-
-  // Gate status grid in Navigate tab
-  const gsGrid = document.getElementById('gateStatusGrid');
-  if (gsGrid) {
-    gsGrid.innerHTML = data.gates.map(g => {
-      const busy = g.queue_length > 50;
-      return `<div class="gate-status-card ${busy ? 'gate-busy' : 'gate-ok'}">
-        <span class="gate-status-name">Gate ${g.id}</span>
-        <span class="gate-status-q">${g.queue_length} in queue</span>
-        <span class="gate-status-dot">${busy ? '🔴 Busy' : '🟢 Open'}</span>
-      </div>`;
-    }).join('');
-  }
+  const att = data.totalAttendance.toLocaleString('en-IN');
+  setText('liveAttendance', att);
+  const avgWait = (data.concessions.reduce((a,c) => a + c.queue_time, 0) / data.concessions.length).toFixed(1);
+  setText('liveWait', avgWait + ' min');
+  const best = [...data.gates].sort((a,b) => a.queue_length - b.queue_length)[0];
+  if (best) setText('bestGate', 'Gate ' + best.id);
+  renderZoneCards(data);
+  renderGateStatus(data.gates);
 });
 
 socket.on('match_update', data => {
-  const el = id => document.getElementById(id);
-  if (el('homeScore'))   el('homeScore').innerText  = data.homeScore;
-  if (el('awayScore'))   el('awayScore').innerText  = data.awayScore;
-  if (el('matchStatus')) el('matchStatus').innerText = data.status.replace(/_/g, ' ').toUpperCase();
-  if (el('matchMinute')) el('matchMinute').innerText = data.minute > 0 ? data.minute + "'" : '';
-  // Update team names if admin changed them
+  setText('homeScore', data.homeScore);
+  setText('awayScore', data.awayScore);
+  setText('matchStatus', data.status.replace(/_/g,' ').toUpperCase());
+  setText('matchMinute', data.minute > 0 ? data.minute + "'" : '');
+
+  // Update team names from admin config
   const sportIcons = { cricket:'🏏', football:'⚽', basketball:'🏀', volleyball:'🏐', kabaddi:'🤸', hockey:'🏑' };
-  const icon = sportIcons[data.sport] || '🏆';
-  const heroTeams = document.querySelectorAll('.team-name');
-  if (heroTeams.length >= 2 && data.homeTeam && data.awayTeam) {
-    heroTeams[0].innerText = data.homeTeam;
-    heroTeams[1].innerText = data.awayTeam;
-  }
-  const teamIcons = document.querySelectorAll('.team-icon');
-  if (teamIcons.length >= 2 && data.sport) {
-    teamIcons[0].innerText = icon;
-    teamIcons[1].innerText = icon;
-  }
-  // Highlight goal events
-  if (data.events && data.events.length > 0) {
+  const icon = sportIcons[data.sport] || '⚽';
+  if (data.homeTeam) setText('heroTeamA', data.homeTeam);
+  if (data.awayTeam) setText('heroTeamB', data.awayTeam);
+  if (data.sport) { setText('heroIconA', icon); setText('heroIconB', icon); }
+
+  // Goal toast
+  if (data.events && data.events.length) {
     const last = data.events[data.events.length - 1];
-    if (last && last.type === 'goal') {
-      showToast(`${icon} GOAL! ${last.team} scores at ${last.minute}'`, 'success');
-    }
+    if (last && last.type === 'goal') showToast(`${icon} GOAL! ${last.team} at ${last.minute}'`, 'success');
   }
 });
 
-// Venue alerts → update the Venue tab list ONLY, never block the screen
 socket.on('alert', alert => {
-  // Only show a tiny toast for critical/emergency events; ignore routine ones
-  if (alert.type === 'danger' || alert.type === 'emergency') {
-    showToast(alert.message, 'danger');
-  }
-  // Silently append to the Venue tab list
-  const list = document.getElementById('alertsList');
-  if (!list) return;
-  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  list.insertAdjacentHTML('afterbegin', `
-    <div class="alert-item-mini ${alert.type}">
-      <span class="alert-dot-${alert.type}"></span>
-      <span class="alert-msg-text">${alert.message}</span>
-      <span class="alert-time-text">${now}</span>
-    </div>`);
-  while (list.children.length > 5) list.lastChild.remove();
+  if (alert.type === 'danger') showToast(alert.message, 'danger');
+  appendAlert(alert);
 });
 
-socket.on('order_update', order => {
-  const existing = myOrders.find(o => o.id === order.id);
-  if (existing) {
-    Object.assign(existing, order);
-    renderMyOrders();
-    // Only notify on meaningful status changes for MY orders
-    if (order.status === 'ready') showToast(`✅ ${order.id} ready — go collect!`, 'success');
-    if (order.status === 'delivered') showToast(`📦 ${order.id} delivered`, 'info');
+socket.on('order_update', updated => {
+  const o = myOrders.find(x => x.id === updated.id);
+  if (o) {
+    Object.assign(o, updated);
+    renderMyOrders(); saveOrders();
+    if (updated.status === 'ready')     showToast(`✅ ${updated.id} ready for pickup!`, 'success');
+    if (updated.status === 'delivered') showToast(`📦 ${updated.id} delivered!`, 'info');
   }
 });
 
-// Staff pushed a menu update (availability toggle)
-socket.on('menu_update', updatedMenu => {
-  fullMenu = updatedMenu;
-  renderMenu(fullMenu);
-});
+socket.on('menu_update', updated => { fullMenu = updated; renderMenu(); });
 
-// ── Tab navigation ─────────────────────────────────────────────────────
-function switchTab(tabId) {
+// ── Tab nav ───────────────────────────────────────────────────
+function switchTab(id) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  const panel = document.getElementById(`tab-${tabId}`);
-  const btn = document.querySelector(`[data-tab="${tabId}"]`);
+  const panel = document.getElementById(`tab-${id}`);
+  const btn   = document.querySelector(`[data-tab="${id}"]`);
   if (panel) panel.classList.add('active');
   if (btn)   btn.classList.add('active');
-  currentTab = tabId;
+  currentTab = id;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function scrollToSection(id) { switchTab(id); }
+// ── Zone cards ────────────────────────────────────────────────
+function renderZoneCards(data) {
+  const c = document.getElementById('zoneCards');
+  if (!c) return;
+  c.innerHTML = data.zones.map(z => {
+    const pct = Math.min(100, (z.current / z.capacity) * 100).toFixed(0);
+    const col = pct > 85 ? '#dc2626' : pct > 60 ? '#f59e0b' : '#059669';
+    const lab = pct > 85 ? '🔴 Packed' : pct > 60 ? '🟡 Busy' : '🟢 Free';
+    const zEl = document.getElementById(`zone-${z.id}`);
+    if (zEl) zEl.setAttribute('class', `zone-path ${pct > 80 ? 'hot' : pct > 50 ? 'warm' : 'cool'}`);
+    return `
+      <div class="zone-card">
+        <div class="zone-card-name">${z.name}</div>
+        <div class="zone-card-count" style="color:${col}">${z.current.toLocaleString('en-IN')}</div>
+        <div class="zone-bar"><div class="zone-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+        <div class="zone-card-label">${lab} · ${pct}%</div>
+      </div>`;
+  }).join('');
 
-// ── Entry Slots ────────────────────────────────────────────────────────
+  // Gate dots
+  data.gates.forEach(g => {
+    const dot = document.getElementById(`gate-${g.id}`);
+    if (dot) { dot.classList.toggle('busy', g.queue_length > 50); }
+  });
+}
+
+function renderGateStatus(gates) {
+  const c = document.getElementById('gateStatusGrid');
+  if (!c) return;
+  c.innerHTML = gates.map(g => {
+    const busy = g.queue_length > 50;
+    return `
+      <div class="gate-status-card ${busy ? 'gate-busy' : 'gate-ok'}">
+        <span class="gate-id">Gate ${g.id}</span>
+        <span class="gate-q">${g.queue_length} in queue</span>
+        <span class="gate-dot-label">${busy ? '🔴 Busy' : '🟢 Open'}</span>
+      </div>`;
+  }).join('');
+}
+
+function appendAlert(a) {
+  const list = document.getElementById('alertsList');
+  if (!list) return;
+  const icons = { danger:'🔴', warning:'🟡', info:'🔵', success:'🟢' };
+  const time = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  list.insertAdjacentHTML('afterbegin', `
+    <div class="alert-mini ${a.type}">
+      <span>${icons[a.type] || '•'}</span>
+      <span class="alert-mini-msg">${a.message}</span>
+      <span class="alert-mini-time">${time}</span>
+    </div>`);
+  while (list.children.length > 6) list.lastChild.remove();
+}
+
+// ── Weather ───────────────────────────────────────────────────
+async function fetchWeather() {
+  try {
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=19.0760&longitude=72.8777&current_weather=true&forecast_days=1');
+    const d = await res.json();
+    const cw = d.current_weather;
+    const icons = [0,1,2,3].includes(cw.weathercode) ? '☀️' : cw.weathercode < 60 ? '🌦️' : '⛈️';
+    setText('heroWeather', `${icons} ${cw.temperature}°C`);
+  } catch(e) {}
+}
+
+// ── Entry Slots ───────────────────────────────────────────────
 async function fetchSlots() {
+  const grid = document.getElementById('slotsGrid');
+  if (!grid) return;
   try {
     const res  = await fetch('/api/entry/slots');
     const data = await res.json();
-    const grid = document.getElementById('slotsGrid');
-    if (!grid) return;
-    grid.innerHTML = data.data.map(slot => `
-      <div class="slot-card ${slot.status === 'full' ? 'full' : ''}" onclick="bookSlot('${slot.id}')">
-        <div class="slot-time">${slot.startTime} – ${slot.endTime}</div>
-        <div class="slot-avail">${slot.capacity - slot.booked} spots left</div>
-        <div class="slot-bar"><div class="slot-fill" style="width:${(slot.booked/slot.capacity)*100}%"></div></div>
-      </div>`).join('');
-  } catch (e) { console.error('fetchSlots', e); }
-}
-
-async function bookSlot(slotId) {
-  const res  = await fetch('/api/entry/book', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ slotId })
-  });
-  const data = await res.json();
-  if (data.success) {
-    localStorage.setItem('venue_booking', JSON.stringify(data.data));
-    renderTicket(data.data);
-    showToast('✅ Entry slot booked!', 'success');
-  } else {
-    showToast(data.error, 'danger');
+    if (!data.success) { grid.innerHTML = `<div class="slot-error">❌ Failed to load slots</div>`; return; }
+    renderSlots(data.data);
+  } catch(e) {
+    grid.innerHTML = `<div class="slot-error">❌ Server error — refresh to retry</div>`;
   }
 }
 
-// ── Food Menu ──────────────────────────────────────────────────────────
+function renderSlots(slots) {
+  const grid = document.getElementById('slotsGrid');
+  if (!grid) return;
+  grid.innerHTML = slots.map(s => {
+    const pct = ((s.booked / s.capacity) * 100).toFixed(0);
+    const left = s.capacity - s.booked;
+    const full = s.status === 'full' || left <= 0;
+    return `
+      <div class="slot-card ${full ? 'full' : ''}" onclick="${full ? '' : `bookSlot('${s.id}')`}">
+        <div class="slot-time">${s.startTime} – ${s.endTime}</div>
+        <div class="slot-avail">${full ? '⛔ Full' : `${left} spots left`}</div>
+        <div class="slot-bar"><div class="slot-fill" style="width:${pct}%"></div></div>
+        ${!full ? `<div class="slot-cta">Tap to Book ↗</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function bookSlot(slotId) {
+  showToast('⏳ Booking slot...', 'info');
+  try {
+    const res  = await fetch('/api/entry/book', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ slotId, count: 1 })
+    });
+    const data = await res.json();
+    if (data.success) {
+      localStorage.setItem('venue_booking', JSON.stringify(data.data));
+      showTicket(data.data);
+      showToast('✅ Entry slot booked!', 'success');
+    } else {
+      showToast(data.error || 'Booking failed', 'danger');
+    }
+  } catch(e) { showToast('Network error — retry', 'danger'); }
+}
+
+function showTicket(d) {
+  const grid    = document.getElementById('slotsGrid');
+  const display = document.getElementById('ticketDisplay');
+  if (grid)    grid.style.display = 'none';
+  if (!display) return;
+  display.style.display = 'block';
+  setText('ticketTime', d.timeWindow);
+  setText('ticketGate', 'Gate ' + d.gate);
+  setText('ticketQRText', d.qrCode);
+  const qr = document.getElementById('ticketQR');
+  if (qr) qr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(d.qrCode)}`;
+}
+
+function resetBooking() {
+  localStorage.removeItem('venue_booking');
+  const grid    = document.getElementById('slotsGrid');
+  const display = document.getElementById('ticketDisplay');
+  if (grid)    grid.style.display = 'grid';
+  if (display) display.style.display = 'none';
+  fetchSlots();
+}
+
+// ── Food Menu ─────────────────────────────────────────────────
 async function fetchMenu() {
   try {
     const res  = await fetch('/api/food/menu');
     const body = await res.json();
-    fullMenu = body.data;
-    renderMenu(fullMenu);
-  } catch (e) { console.error('fetchMenu', e); }
+    fullMenu = body.data || [];
+    renderMenu();
+  } catch(e) {
+    const g = document.getElementById('menuGrid');
+    if (g) g.innerHTML = `<div class="slot-error">❌ Menu failed to load</div>`;
+  }
 }
 
-function filterMenu(category) {
-  document.querySelectorAll('.food-cat-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-  renderMenu(category === 'all' ? fullMenu : fullMenu.filter(m => m.category === category));
+let currentCategory = 'all';
+function filterMenu(cat, btn) {
+  currentCategory = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMenu();
 }
 
-function renderMenu(items) {
+function renderMenu() {
   const grid = document.getElementById('menuGrid');
   if (!grid) return;
-  const available = items.filter(i => i.available !== false);
-  const unavailable = items.filter(i => i.available === false);
-  grid.innerHTML = [
-    ...available.map(item => `
-      <div class="menu-item" onclick="addToCart('${item.id}','${item.name.replace(/'/g,"\\'")}',${item.price})">
-        <span class="menu-item-emoji">${item.image}</span>
-        <div class="menu-item-name">${item.name}</div>
-        <div class="menu-item-price">₹${item.price}</div>
-        <div class="menu-item-add">+</div>
-      </div>`),
-    ...unavailable.map(item => `
-      <div class="menu-item unavailable" title="Currently unavailable">
-        <span class="menu-item-emoji" style="opacity:0.4">${item.image}</span>
-        <div class="menu-item-name" style="opacity:0.5">${item.name}</div>
-        <div class="menu-item-price" style="color:#666">Unavailable</div>
-        <div class="menu-item-add" style="background:#444;cursor:not-allowed">✕</div>
-      </div>`)
-  ].join('');
+  const items = currentCategory === 'all' ? fullMenu : fullMenu.filter(i => i.category === currentCategory);
+  if (!items.length) { grid.innerHTML = `<div class="slot-error">No items in this category</div>`; return; }
+  grid.innerHTML = items.map(item => {
+    const avail = item.available !== false;
+    return `
+      <div class="menu-card ${avail ? '' : 'unavailable'}" onclick="${avail ? `addToCart('${item.id}','${item.name.replace(/'/g,"\\'")}',${item.price},'${item.image||'🍽️'}')` : ''}">
+        <div class="menu-emoji">${item.image || '🍽️'}</div>
+        <div class="menu-name">${item.name}</div>
+        <div class="menu-price">${avail ? '₹'+item.price : '⛔ Unavailable'}</div>
+        ${avail ? `<div class="menu-add-btn">+ Add</div>` : ''}
+      </div>`;
+  }).join('');
 }
 
-function addToCart(id, name, price) {
-  const existing = cart.find(i => i.id === id);
-  if (existing) existing.qty++;
-  else cart.push({ id, name, price, qty: 1 });
-  updateCartUI();
-  showToast(`🛒 ${name} added`, 'success');
+// ── Cart ──────────────────────────────────────────────────────
+function addToCart(id, name, price, image) {
+  const ex = cart.find(i => i.id === id);
+  if (ex) ex.qty++;
+  else cart.push({ id, name, price, qty:1, image });
+  renderCart();
+  showToast(`🛒 ${name} added!`, 'success');
 }
 
 function removeFromCart(id) {
   const idx = cart.findIndex(i => i.id === id);
-  if (idx !== -1) {
-    if (cart[idx].qty > 1) cart[idx].qty--;
-    else cart.splice(idx, 1);
-    updateCartUI();
-  }
+  if (idx < 0) return;
+  if (cart[idx].qty > 1) cart[idx].qty--;
+  else cart.splice(idx, 1);
+  renderCart();
 }
 
-function updateCartUI() {
-  const container = document.getElementById('cartContainer');
-  if (!container) return;
-  if (cart.length === 0) { container.style.display = 'none'; return; }
-  container.style.display = 'block';
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const count = cart.reduce((s, i) => s + i.qty, 0);
-  document.getElementById('cartTotal').innerText = total;
-  document.getElementById('cartCount').innerText = count;
-  document.getElementById('cartItems').innerHTML = cart.map(item => `
-    <div class="cart-item">
-      <span>${item.image || ''} ${item.name} (x${item.qty})</span>
-      <span style="display:flex;align-items:center;gap:8px">
-        ₹${item.price * item.qty}
-        <button onclick="removeFromCart('${item.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1rem">✕</button>
-      </span>
-    </div>`).join('');
+function renderCart() {
+  const bar = document.getElementById('cartBar');
+  if (!bar) return;
+  if (!cart.length) { bar.style.display = 'none'; isCartOpen = false; return; }
+  bar.style.display = 'block';
+  const total = cart.reduce((s,i) => s + i.price * i.qty, 0);
+  const count = cart.reduce((s,i) => s + i.qty, 0);
+  setText('cartCount', count);
+  setText('cartTotal', total.toLocaleString('en-IN'));
+  const items = document.getElementById('cartItems');
+  if (items) {
+    items.innerHTML = cart.map(item => `
+      <div class="cart-row">
+        <span>${item.image} ${item.name} × ${item.qty}</span>
+        <span>₹${(item.price * item.qty).toLocaleString('en-IN')}</span>
+        <button onclick="removeFromCart('${item.id}')" class="cart-remove">✕</button>
+      </div>`).join('');
+  }
 }
 
 function toggleCart() {
-  const body = document.getElementById('cartBody');
-  if (body) body.style.display = body.style.display === 'block' ? 'none' : 'block';
+  isCartOpen = !isCartOpen;
+  const drop = document.getElementById('cartDropdown');
+  if (drop) drop.style.display = isCartOpen ? 'block' : 'none';
 }
 
-// ── Razorpay Payment Flow ──────────────────────────────────────────────
+// ── Place Order (Demo mode — works without Razorpay) ──────────
 async function placeOrder() {
   const seat = document.getElementById('seatInput')?.value?.trim();
-  const zone = document.getElementById('foodZone')?.value;
-  if (!seat) return showToast('Enter your seat/section first', 'danger');
-  if (!cart.length) return showToast('Cart is empty', 'danger');
+  const zone = document.getElementById('foodZone')?.value || 'north';
+  if (!seat)        return showToast('⚠️ Enter your seat number first', 'danger');
+  if (!cart.length) return showToast('⚠️ Cart is empty', 'danger');
 
-  // Check Razorpay SDK is loaded
-  if (!window.Razorpay) {
-    return showToast('Payment SDK not loaded — check internet connection', 'danger');
-  }
-
-  const placeBtn = document.getElementById('placeOrderBtn');
-  if (placeBtn) { placeBtn.disabled = true; placeBtn.innerText = '⏳ Creating order...'; }
+  const btn = document.getElementById('placeOrderBtn');
+  if (btn) { btn.disabled = true; btn.innerText = '⏳ Placing order...'; }
 
   try {
+    // Step 1: Create order via API (triggers demo payment flow)
     const res  = await fetch('/api/payment/create-order', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ items: cart, zone, seat })
@@ -316,244 +342,157 @@ async function placeOrder() {
     const data = await res.json();
 
     if (!data.success) {
-      showToast(data.error || 'Failed to initiate payment', 'danger');
+      showToast(data.error || 'Failed to create order', 'danger');
+      if (btn) { btn.disabled = false; btn.innerText = '💳 Confirm Order (Demo Pay)'; }
       return;
     }
 
-    // Always open real Razorpay checkout — no custom modal
-    openRazorpay(data.data, zone, seat);
+    // Step 2: In demo mode, verify immediately (no payment gateway needed)
+    const vRes = await fetch('/api/payment/verify', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        pendingRef: data.data.pendingRef,
+        razorpay_order_id: data.data.rzpOrderId,
+        razorpay_payment_id: `demo_${Date.now()}`,
+        razorpay_signature: '',
+        demoSuccess: true
+      })
+    });
+    const vData = await vRes.json();
 
-  } catch (e) {
+    if (vData.success) {
+      handleOrderSuccess(vData.data);
+    } else {
+      showToast(vData.error || 'Order failed', 'danger');
+    }
+  } catch(e) {
     showToast('Network error — please retry', 'danger');
-    console.error(e);
   } finally {
-    if (placeBtn) { placeBtn.disabled = false; placeBtn.innerText = '💳 Pay & Order'; }
+    if (btn) { btn.disabled = false; btn.innerText = '💳 Confirm Order (Demo Pay)'; }
   }
 }
 
-function openRazorpay({ pendingRef, rzpOrderId, rzpKeyId, total }, zone, seat) {
-  const options = {
-    key: rzpKeyId,                        // Your rzp_test_ or rzp_live_ key
-    amount: total * 100,                  // paise
-    currency: 'INR',
-    name: 'VenueAI Stadium',
-    description: `Food Order — Seat ${seat}`,
-    image: 'https://via.placeholder.com/80x80/6366f1/ffffff?text=🏟',
-    order_id: rzpOrderId,
-    prefill: {
-      name: '',                           // Razorpay will let user fill
-      email: '',
-      contact: ''
-    },
-    notes: { seat, zone },
-    theme: { color: '#6366f1' },
-    handler: async function (response) {
-      // response = { razorpay_payment_id, razorpay_order_id, razorpay_signature }
-      try {
-        const vRes = await fetch('/api/payment/verify', {
-          method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ pendingRef, ...response })
-        });
-        const vData = await vRes.json();
-        if (vData.success) {
-          onOrderSuccess(vData.data);
-        } else {
-          showToast('Payment verification failed — contact support', 'danger');
-        }
-      } catch (e) {
-        showToast('Verification network error', 'danger');
-      }
-    },
-    modal: {
-      ondismiss: () => showToast('Payment cancelled', 'warning')
-    }
-  };
-
-  const rzp = new window.Razorpay(options);
-  rzp.on('payment.failed', function (resp) {
-    showToast(`Payment failed: ${resp.error.description}`, 'danger');
-  });
-  rzp.open();
-}
-
-function onOrderSuccess(order) {
+function handleOrderSuccess(order) {
   myOrders.push(order);
   cart = [];
-  updateCartUI();
-  const cartBody = document.getElementById('cartBody');
-  if (cartBody) cartBody.style.display = 'none';
-  switchTab('myorders');
+  renderCart();
+  isCartOpen = false;
+  const drop = document.getElementById('cartDropdown');
+  if (drop) drop.style.display = 'none';
+  saveOrders();
   renderMyOrders();
+  switchTab('myorders');
   showToast('✅ Order confirmed! Show QR at pickup', 'success');
 }
 
-
-// ── My Orders ──────────────────────────────────────────────────────────
+// ── My Orders ─────────────────────────────────────────────────
 function renderMyOrders() {
   const list = document.getElementById('myOrdersList');
   if (!list) return;
   if (!myOrders.length) {
-    list.innerHTML = `<div class="empty-state"><span class="empty-icon">📋</span><p>No orders yet. Head to the Food tab to order!</p></div>`;
+    list.innerHTML = `<div class="empty-state"><span>📋</span><p>No orders yet — go to Food tab!</p></div>`;
     return;
   }
-  list.innerHTML = [...myOrders].reverse().map(order => {
-    const eta = order.remainingTime > 0 ? `${order.remainingTime}s` : '—';
-    const statusColor = order.status === 'ready' ? '#10b981' : order.status === 'delivered' ? '#6366f1' : '#f59e0b';
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(order.qrCode || order.id)}`;
+  list.innerHTML = [...myOrders].reverse().map(o => {
+    const eta = o.remainingTime > 0 ? `⏱️ ${o.remainingTime}s` : '';
+    const sc = o.status === 'ready' ? '#059669' : o.status === 'delivered' ? '#6366f1' : '#f59e0b';
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(o.qrCode || o.id)}`;
     return `
       <div class="order-card">
-        <div class="order-card-top">
-          <div>
-            <span class="order-id">${order.id}</span>
-            <div class="order-items-summary">${(order.items||[]).map(i=>`${i.image||'🍽️'} ${i.name} x${i.qty}`).join(', ')}</div>
-          </div>
-          <span class="order-status-badge" style="background:${statusColor}">${order.status.toUpperCase()}</span>
+        <div class="order-top">
+          <span class="order-id">${o.id}</span>
+          <span class="order-badge" style="background:${sc}">${o.status.toUpperCase()}</span>
         </div>
+        <div class="order-items">${(o.items||[]).map(i => `${i.image||'🍽️'} ${i.name} ×${i.qty}`).join(' · ')}</div>
         <div class="order-meta">
-          <span>📍 ${order.seat} — ${order.zone?.toUpperCase()}</span>
-          <span>💰 ₹${order.total}</span>
-          <span>${order.status === 'preparing' ? `⏱️ ETA: ${eta}` : order.status === 'ready' ? '✅ Ready for pickup!' : '📦 Delivered'}</span>
+          <span>📍 ${o.seat} — ${(o.zone||'').toUpperCase()}</span>
+          <span>💰 ₹${o.total}</span>
+          <span>${o.status === 'preparing' ? eta || '⏳ Preparing' : o.status === 'ready' ? '✅ Ready!' : '📦 Delivered'}</span>
         </div>
-        ${order.status !== 'delivering' ? `
         <div class="order-qr-row">
-          <img src="${qrUrl}" alt="Pickup QR" style="width:80px;height:80px;border-radius:8px">
-          <div class="order-qr-text">
-            <p style="font-weight:600">Pickup QR Code</p>
-            <p style="font-size:0.75rem;color:#9ca3af;font-family:monospace">${order.qrCode || order.id}</p>
-            <p style="font-size:0.75rem;color:#9ca3af">Show to staff at ${order.concession || 'concession stand'}</p>
+          <img src="${qrUrl}" alt="QR" class="order-qr-img">
+          <div>
+            <div style="font-weight:800;font-size:0.9rem;">Pickup QR</div>
+            <div style="font-size:0.72rem;font-family:monospace;color:var(--text-secondary)">${o.qrCode || o.id}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">Show to staff at ${o.concession || 'concession'}</div>
           </div>
-        </div>` : ''}
+        </div>
       </div>`;
   }).join('');
 }
 
-// ── Smart Navigation ───────────────────────────────────────────────────
+// ── Smart Navigation ─────────────────────────────────────────
 async function getRoute() {
-  const destination = document.getElementById('navDestination')?.value || 'seat';
+  const dest = document.getElementById('navDestination')?.value || 'seat';
   const gate = venueState?.gates ? [...venueState.gates].sort((a,b)=>a.queue_length-b.queue_length)[0]?.id : 'A';
-
-  const btn = document.querySelector('.nav-find-btn');
+  const btn  = document.querySelector('.nav-btn');
   if (btn) { btn.disabled = true; btn.innerText = '🔎 Finding route...'; }
-
   try {
-    const res  = await fetch(`/api/routing/optimal?to=${destination}&gate=${gate}`);
+    const res  = await fetch(`/api/routing/optimal?to=${dest}&gate=${gate}`);
     const data = await res.json();
     if (!data.success) return showToast('Could not calculate route', 'danger');
 
     const r = data.data.recommended;
     const alts = data.data.alternatives;
-    const congColor = r.congestion === 'low' ? '#10b981' : r.congestion === 'medium' ? '#f59e0b' : '#ef4444';
-
-    document.getElementById('routeResults').style.display = 'block';
-    document.getElementById('recommendedRoute').innerHTML = `
-      <div class="route-badge">⭐ Best Route</div>
-      <div class="route-steps">
-        ${r.steps.map((step, i) => `
-          <div class="route-step">
-            <div class="route-step-num">${i+1}</div>
-            <div>${step}</div>
-          </div>`).join('<div class="route-connector"></div>')}
+    const col = r.congestion === 'low' ? '#059669' : r.congestion === 'medium' ? '#f59e0b' : '#dc2626';
+    const results = document.getElementById('routeResults');
+    results.style.display = 'block';
+    results.innerHTML = `
+      <div class="route-card best">
+        <div class="route-best-badge">⭐ Best Route</div>
+        <div class="route-steps">
+          ${r.steps.map((s,i) => `<div class="route-step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join('<div class="step-connector"></div>')}
+        </div>
+        <div class="route-meta">
+          <span>📏 ${r.distance}</span>
+          <span>⏱️ ${r.time}</span>
+          <span style="color:${col}">● ${r.congestion.toUpperCase()}</span>
+        </div>
       </div>
-      <div class="route-meta">
-        <span>📏 ${r.distance}</span>
-        <span>⏱️ ${r.time}</span>
-        <span style="color:${congColor}">● ${r.congestion.toUpperCase()} congestion</span>
-      </div>`;
+      ${alts.map(a => `
+        <div class="route-card alt">
+          <div style="font-weight:800;margin-bottom:6px">${a.label}</div>
+          <div style="font-size:0.82rem;color:var(--text-secondary)">${a.steps.join(' → ')}</div>
+          <div class="route-meta" style="margin-top:6px"><span>📏 ${a.distance}</span><span>⏱️ ${a.time}</span></div>
+        </div>`).join('')}`;
 
-    const altContainer = document.getElementById('altRoutes');
-    if (altContainer) {
-      altContainer.innerHTML = alts.map(alt => `
-        <div class="route-alt-card">
-          <div style="font-weight:600;margin-bottom:8px">${alt.label}</div>
-          <div style="font-size:0.85rem;color:#9ca3af;margin-bottom:6px">${alt.steps.join(' → ')}</div>
-          <div class="route-meta"><span>📏 ${alt.distance}</span><span>⏱️ ${alt.time}</span></div>
-        </div>`).join('');
-    }
-
-    if (data.data.lowCongestionGates?.length) {
-      showToast(`💡 Low congestion: Gates ${data.data.lowCongestionGates.join(', ')}`, 'info');
-    }
-  } catch(e) {
-    showToast('Navigation error. Please retry.', 'danger');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerText = '🧭 Find Best Route'; }
-  }
+    if (data.data.lowCongestionGates?.length) showToast(`💡 Low traffic: Gates ${data.data.lowCongestionGates.join(', ')}`, 'info');
+  } catch(e) { showToast('Navigation error — retry', 'danger'); }
+  finally { if (btn) { btn.disabled = false; btn.innerText = '🧭 Find Best Route'; } }
 }
 
-function populateGateStatus() {
-  // Placeholder until first socket update
-  const gsGrid = document.getElementById('gateStatusGrid');
-  if (!gsGrid) return;
-  ['A','B','C','D','E','F','G','H'].forEach(id => {
-    gsGrid.innerHTML += `<div class="gate-status-card gate-ok" id="gstatus-${id}">
-      <span class="gate-status-name">Gate ${id}</span>
-      <span class="gate-status-q">— in queue</span>
-      <span class="gate-status-dot">⏳ Loading...</span>
-    </div>`;
+// ── CCTV AI animation ─────────────────────────────────────────
+function animateBboxes() {
+  document.querySelectorAll('.ai-bbox').forEach(b => {
+    b.style.top  = (10 + Math.random()*50)+'%';
+    b.style.left = (10 + Math.random()*60)+'%';
   });
+  const c = document.getElementById('aiConfidence');
+  if (c) c.innerText = (94 + Math.random()*5).toFixed(1) + '%';
 }
 
-// ── CCTV AI bounding box animation ─────────────────────────────────────
-function animateCameraBoxes() {
-  document.querySelectorAll('.ai-bbox').forEach(box => {
-    const top  = 10 + Math.random() * 50;
-    const left = 10 + Math.random() * 60;
-    box.style.top  = top + '%';
-    box.style.left = left + '%';
-  });
-  const confEl = document.getElementById('aiConfidence');
-  if (confEl) confEl.innerText = (94 + Math.random()*5).toFixed(1) + '%';
-}
+// ── Helpers ───────────────────────────────────────────────────
+function setText(id, val) { const el = document.getElementById(id); if (el) el.innerText = val; }
 
-// ── Toast — tiny pill at top, non-blocking ─────────────────────────────
-let _toastQueue = [];
-let _toastShowing = false;
-
-function showToast(msg, type = 'info') {
-  _toastQueue.push({ msg, type });
-  if (!_toastShowing) _flushToast();
-}
-
-function _flushToast() {
-  if (!_toastQueue.length) { _toastShowing = false; return; }
-  _toastShowing = true;
-  const { msg, type } = _toastQueue.shift();
-
-  const colors = { danger:'#dc2626', success:'#059669', warning:'#d97706', info:'#4f46e5' };
-  const icons  = { danger:'⚠', success:'✓', warning:'●', info:'ℹ' };
-
-  // Reuse or create the single shared pill element
-  let pill = document.getElementById('_toastPill');
+// ── Toast ─────────────────────────────────────────────────────
+let _tq = [], _ts = false;
+function showToast(msg, type='info') { _tq.push({msg,type}); if (!_ts) _flush(); }
+function _flush() {
+  if (!_tq.length) { _ts = false; return; }
+  _ts = true;
+  const {msg,type} = _tq.shift();
+  const cols = { danger:'#dc2626', success:'#059669', warning:'#d97706', info:'#4f46e5' };
+  let pill = document.getElementById('_tp');
   if (!pill) {
-    pill = document.createElement('div');
-    pill.id = '_toastPill';
-    pill.style.cssText = [
-      'position:fixed', 'top:12px', 'left:50%', 'transform:translateX(-50%) translateY(-48px)',
-      'z-index:99999', 'display:flex', 'align-items:center', 'gap:6px',
-      'padding:5px 14px 5px 10px', 'border-radius:999px',
-      'font-size:0.78rem', 'font-weight:600', 'color:#fff',
-      'box-shadow:0 2px 12px rgba(0,0,0,0.35)',
-      'transition:transform 0.25s cubic-bezier(.4,0,.2,1), opacity 0.25s',
-      'opacity:0', 'pointer-events:none', 'max-width:80vw',
-      'white-space:nowrap', 'overflow:hidden', 'text-overflow:ellipsis'
-    ].join(';');
+    pill = document.createElement('div'); pill.id = '_tp';
+    pill.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%) translateY(-60px);z-index:99999;display:flex;align-items:center;gap:6px;padding:8px 18px;border-radius:999px;font-size:0.82rem;font-weight:700;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.5);transition:transform 0.25s ease,opacity 0.25s ease;opacity:0;pointer-events:none;font-family:Nunito,sans-serif;max-width:85vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
     document.body.appendChild(pill);
   }
-
-  pill.style.background = colors[type] || colors.info;
-  pill.innerHTML = `<span style="font-size:0.85rem">${icons[type]||icons.info}</span><span>${msg}</span>`;
-
-  // Slide in
-  requestAnimationFrame(() => {
-    pill.style.opacity = '1';
-    pill.style.transform = 'translateX(-50%) translateY(0)';
-  });
-
-  // Slide out after 2.2 s
+  pill.style.background = cols[type] || cols.info;
+  pill.innerText = msg;
+  requestAnimationFrame(() => { pill.style.opacity='1'; pill.style.transform='translateX(-50%) translateY(0)'; });
   setTimeout(() => {
-    pill.style.opacity = '0';
-    pill.style.transform = 'translateX(-50%) translateY(-48px)';
-    setTimeout(() => _flushToast(), 280);
-  }, 2200);
+    pill.style.opacity='0'; pill.style.transform='translateX(-50%) translateY(-60px)';
+    setTimeout(_flush, 280);
+  }, 2400);
 }
-
