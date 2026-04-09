@@ -145,6 +145,14 @@ function runAIAnalysis() {
   else if (minute > 80 && status === 'second_half') alert = '📣 Pre-exit crowd management soon';
   setText('aiAlert', alert);
 
+  // Weather Impact AI
+  let wImpact = '✅ Low Risk (Good)';
+  if((weatherData?.rainChance || 0) > 50) wImpact = '🌧️ High Risk (Rain)';
+  else if((weatherData?.temp || 0) > 35) wImpact = '🔥 High Heat Risk';
+  else if((weatherData?.temp || 0) < 5) wImpact = '❄️ Frost Risk';
+  setText('aiWeatherImpact', wImpact);
+
+
   // Predicted winner
   let pred = 'Too early to predict';
   if (status === 'pre_match' || status === 'reset') pred = 'Match hasn\'t started';
