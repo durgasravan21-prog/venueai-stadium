@@ -81,7 +81,8 @@ socket.on('match_update', data => {
       saltlake: 'Salt Lake Stadium',
       jawaharlal: 'Jawaharlal Nehru Stadium',
       indira: 'Indira Gandhi Arena',
-      smc: 'SMC Indoor Complex'
+      smc: 'SMC Indoor Complex',
+      ipl: 'IPL T20 Tournament', t20: 'T20 Internationals', epl: 'Premier League', nba: 'NBA Pro Basketball', tennis: 'Grand Slam Tennis', volleyball: 'Pro Volley League', kabaddi: 'Pro Kabaddi League', hockey: 'World Hockey Series',
     };
     const stName = stadiumNames[data.stadium] || 'VenueAI Stadium';
     const titleEl = document.getElementById('heroTitle');

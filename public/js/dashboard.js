@@ -437,16 +437,16 @@ socket.on('match_update', data => {
          sportSelect.value = data.sport;
          currentSport = data.sport;
       }
-      const stadiumSelect = document.getElementById('stadiumSelect');
-      if(stadiumSelect && data.stadium) {
-         stadiumSelect.value = data.stadium;
-      }
-  }
-
   const hi = document.getElementById('homeScoreInput');
   const ai = document.getElementById('awayScoreInput');
-  if (hi) hi.value = data.homeScore;
-  if (ai) ai.value = data.awayScore;
+  const ss = document.getElementById('sportSelect');
+  const sts = document.getElementById('stadiumSelect');
+
+  if (hi && document.activeElement !== hi) hi.value = data.homeScore;
+  if (ai && document.activeElement !== ai) ai.value = data.awayScore;
+  if (ss && document.activeElement !== ss) ss.value = data.sport;
+  if (sts && document.activeElement !== sts) sts.value = data.stadium;
+  
   if (data.events && data.events.length > allMatchEvents.length) {
     allMatchEvents = data.events;
     renderMatchEvents();

@@ -425,6 +425,7 @@ app.post('/api/match/control', (req, res) => {
       break;
     case 'reset':
       matchState = {
+        stadium: matchState.stadium || 'metastadium',
         status: 'pre_match', minute: 0,
         homeTeam: matchState.homeTeam || 'Metro United', awayTeam: matchState.awayTeam || 'City Strikers',
         homeScore: 0, awayScore: 0, events: [], attendance: 0,
@@ -670,6 +671,7 @@ app.post('/api/staff/:id/release', (req, res) => {
   const s = staff.find(st => st.id === req.params.id);
   if (!s) return res.status(404).json({ success: false, error: 'Staff not found' });
   s.status = 'available';
+  s.manualDispatch = false;
   s.currentTask = null;
   syncStaff(s);
   io.emit('staff_update', s);
@@ -827,7 +829,7 @@ app.post('/api/payment/verify', (req, res) => {
     estimatedTime: pending.maxPrepTime + Math.floor(concession.queue_time * 0.5),
     remainingTime: pending.maxPrepTime + Math.floor(concession.queue_time * 0.5),
     paymentId: razorpay_payment_id || `demo_${Date.now()}`,
-    qrCode: `PICKUP-${order?.id || orderIdCounter}-${uuidv4().split('-')[0].toUpperCase()}`,
+    qrCode: null, // Assigned below
     createdAt: new Date().toISOString()
   };
   // Fix self-ref for qrCode
