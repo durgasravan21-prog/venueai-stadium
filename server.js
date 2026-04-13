@@ -85,22 +85,6 @@ const VENUE = {
   ]
 };
 
-// Match/Event State (Updated for SRH vs RR context)
-let matchState = {
-  stadium: 'metastadium',
-  status: 'pre_match', 
-  minute: 0,
-  homeTeam: 'SRH (Sunrisers)',
-  awayTeam: 'RR (Royals)',
-  homeScore: 0,
-  awayScore: 0,
-  events: [],
-  attendance: 0,
-  sport: 'cricket',
-  battingTeam: 'home', 
-  worldSyncMode: false 
-};
-
 // Real-World Sports News Knowledge Base
 const WORLD_NEWS_FEED = [
   { msg: '🏏 IPL: SRH vs RR Match Completed! SRH won by 4 runs.', type: 'success' },
@@ -117,15 +101,37 @@ const GOOGLE_REALITY_FEED = {
   sport: 'cricket'
 };
 
+// Match/Event State (Enhanced for Cricket Reality)
+let matchState = {
+  stadium: 'hyderabad_stadium',
+  stadiumName: 'Rajiv Gandhi Intl Stadium',
+  status: 'pre_match', 
+  minute: 0,
+  homeTeam: 'SRH (Sunrisers)',
+  awayTeam: 'RR (Royals)',
+  homeScore: 0,
+  homeWickets: 0,
+  awayScore: 0,
+  awayWickets: 0,
+  target: 0, // Set after 1st innings
+  events: [],
+  attendance: 0,
+  sport: 'cricket',
+  battingTeam: 'home', 
+  worldSyncMode: false 
+};
+
 // Simulated Real-World AI Agent Connector
 function runWorldAgent() {
   if (!matchState.worldSyncMode) return;
 
-  // ENSURE AGENT IS MASTER: Force state to match reality feed if drift occurs
+  // ENSURE AGENT IS MASTER
   if (matchState.homeTeam !== GOOGLE_REALITY_FEED.homeTeam) matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
   if (matchState.awayTeam !== GOOGLE_REALITY_FEED.awayTeam) matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
-  if (matchState.stadium !== GOOGLE_REALITY_FEED.stadium) matchState.stadium = GOOGLE_REALITY_FEED.stadium;
-  if (matchState.sport !== GOOGLE_REALITY_FEED.sport) matchState.sport = GOOGLE_REALITY_FEED.sport;
+  if (matchState.stadium !== GOOGLE_REALITY_FEED.stadium) {
+    matchState.stadium = GOOGLE_REALITY_FEED.stadium;
+    matchState.stadiumName = GOOGLE_REALITY_FEED.stadiumName;
+  }
 
   // Periodically push real-world tournament news
   if (Math.random() < 0.005) {
@@ -143,19 +149,28 @@ function runWorldAgent() {
   // Handle innings transitions automatically
   if (matchState.status === 'first_half' && matchState.minute >= 45) {
      matchState.status = 'halftime';
-     addAlert('info', `🌍 GOOGLE SYNC: 1st Innings Over at ${GOOGLE_REALITY_FEED.stadiumName}.`, 'match');
+     matchState.target = matchState.homeScore + 1; // SET TARGET
+     addAlert('info', `🌍 GOOGLE SYNC: Innings Break. Target for ${matchState.awayTeam}: ${matchState.target}`, 'match');
   }
 
   if (matchState.status === 'halftime' && Math.random() < 0.05) {
      matchState.status = 'second_half';
      matchState.battingTeam = 'away'; 
-     addAlert('warning', `🌍 GOOGLE SYNC: 2nd Innings Started! ${matchState.awayTeam} Chasing...`, 'match');
+     addAlert('warning', `🌍 GOOGLE SYNC: 2nd Innings Started! ${matchState.awayTeam} chasing ${matchState.target}`, 'match');
   }
 
-  // Auto-update scores from 'Google' feed
-  if (['first_half', 'second_half'].includes(matchState.status) && Math.random() < 0.02) {
-      if (Math.random() > 0.5) matchState.homeScore += Math.floor(Math.random() * 6) + 1;
-      else matchState.awayScore += Math.floor(Math.random() * 6) + 1;
+  // Realistic Cricket Scoring (Runs & Wickets)
+  if (['first_half', 'second_half'].includes(matchState.status) && Math.random() < 0.05) {
+      const runs = [0, 1, 2, 4, 6][Math.floor(Math.random() * 5)];
+      const wicket = Math.random() < 0.08; // 8% chance of a wicket
+
+      if (matchState.status === 'first_half') {
+        matchState.homeScore += runs;
+        if (wicket && matchState.homeWickets < 10) matchState.homeWickets++;
+      } else {
+        matchState.awayScore += runs;
+        if (wicket && matchState.awayWickets < 10) matchState.awayWickets++;
+      }
       io.emit('match_update', matchState);
   }
 }

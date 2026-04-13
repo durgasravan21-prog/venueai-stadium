@@ -465,10 +465,18 @@ socket.on('match_update', data => {
     syncInd.style.color = data.worldSyncMode ? '#4285f4' : 'var(--text-muted)';
   }
 
-  setText('topScore', `${data.homeScore} : ${data.awayScore}`);
-  setText('topStatus', data.minute > 0 ? `${data.minute}'` : data.status.replace(/_/g, ' ').toUpperCase());
-  setText('ctrlHomeScore', data.homeScore);
-  setText('ctrlAwayScore', data.awayScore);
+  const hScore = data.sport === 'cricket' ? `${data.homeScore}/${data.homeWickets}` : data.homeScore;
+  const aScore = data.sport === 'cricket' ? `${data.awayScore}/${data.awayWickets}` : data.awayScore;
+
+  setText('topScore', `${hScore} : ${aScore}`);
+  
+  let statusText = data.status.replace(/_/g, ' ').toUpperCase();
+  if (data.minute > 0) statusText = `${data.minute}' | ${statusText}`;
+  if (data.target > 0 && data.status === 'second_half') statusText += ` (TARGET: ${data.target})`;
+  
+  setText('topStatus', statusText);
+  setText('ctrlHomeScore', hScore);
+  setText('ctrlAwayScore', aScore);
   setText('ctrlStatus', data.status.replace(/_/g, ' ').toUpperCase());
   setText('ctrlMinute', data.minute > 0 ? `${data.minute}'` : '—');
   

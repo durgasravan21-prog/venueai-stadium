@@ -58,10 +58,25 @@ socket.on('venue_update', data => {
 });
 
 socket.on('match_update', data => {
-  setText('homeScore', data.homeScore);
-  setText('awayScore', data.awayScore);
+  // Cricket Formatting: Score/Wickets
+  const hText = data.sport === 'cricket' ? `${data.homeScore}/${data.homeWickets}` : data.homeScore;
+  const aText = data.sport === 'cricket' ? `${data.awayScore}/${data.awayWickets}` : data.awayScore;
+  
+  setText('homeScore', hText);
+  setText('awayScore', aText);
   setText('matchStatus', data.status.replace(/_/g,' ').toUpperCase());
   setText('matchMinute', data.minute > 0 ? data.minute + "'" : '');
+
+  // Target Update
+  const targetEl = document.getElementById('targetScore');
+  if (targetEl) {
+    if (data.target > 0 && data.status === 'second_half') {
+      targetEl.innerText = `Target: ${data.target}`;
+      targetEl.style.display = 'block';
+    } else {
+      targetEl.style.display = 'none';
+    }
+  }
 
   // Sport-specific Icons and Real-world Role Assignment
   const sportIcons = { cricket:'🏏', football:'⚽', basketball:'🏀', volleyball:'🏐', kabaddi:'⛹️', hockey:'🏑' };
