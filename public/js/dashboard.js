@@ -211,8 +211,27 @@ const sportControlLabels = {
 };
 
 function updateStadium() {
-  currentStadium = document.getElementById('stadiumSelect')?.value || 'metastadium';
-  showToast(`🏟️ Stadium updated to ${document.getElementById('stadiumSelect')?.options[document.getElementById('stadiumSelect').selectedIndex]?.text}`);
+  const select = document.getElementById('stadiumSelect');
+  if(!select) return;
+  currentStadium = select.value || 'metastadium';
+  
+  // Real-world Auto-detection of Sport type from Tournament
+  const tournamentSportMap = {
+    ipl: 'cricket', t20: 'cricket',
+    epl: 'football', football: 'football',
+    nba: 'basketball', tennis: 'tennis',
+    volleyball: 'volleyball', kabaddi: 'kabaddi', hockey: 'hockey'
+  };
+  
+  if (tournamentSportMap[currentStadium]) {
+    const sportSelect = document.getElementById('sportSelect');
+    if (sportSelect) {
+      sportSelect.value = tournamentSportMap[currentStadium];
+      updateSport(); // Switch controls immediately
+    }
+  }
+
+  showToast(`🏟️ Stadium updated to ${select.options[select.selectedIndex]?.text}`);
   applyMatchConfig(); 
 }
 

@@ -63,12 +63,34 @@ socket.on('match_update', data => {
   setText('matchStatus', data.status.replace(/_/g,' ').toUpperCase());
   setText('matchMinute', data.minute > 0 ? data.minute + "'" : '');
 
-  // Update team names from admin config
-  const sportIcons = { cricket:'🏏', football:'⚽', basketball:'🏀', volleyball:'🏐', kabaddi:'🤸', hockey:'🏑' };
-  const icon = sportIcons[data.sport] || '⚽';
+  // Sport-specific Icons and Real-world Role Assignment
+  const sportIcons = { cricket:'🏏', football:'⚽', basketball:'🏀', volleyball:'🏐', kabaddi:'⛹️', hockey:'🏑' };
+  let iconA = sportIcons[data.sport] || '🏟️';
+  let iconB = iconA;
+
+  // Custom roles for Cricket (Batting vs Bowling)
+  if (data.sport === 'cricket') {
+    iconA = '🏏'; // Batting
+    iconB = '⚾'; // Bowling/Fielding
+  }
+
   if (data.homeTeam) setText('heroTeamA', data.homeTeam);
   if (data.awayTeam) setText('heroTeamB', data.awayTeam);
-  if (data.sport) { setText('heroIconA', icon); setText('heroIconB', icon); }
+  setText('heroIconA', iconA);
+  setText('heroIconB', iconB);
+
+  // Reality Sync Status (AI Agent connection simulation)
+  const syncMsgs = [
+    `📡 Reality Sync: Active (${data.sport?.toUpperCase()} API)`,
+    `🤖 AI Agent: Analyzing ${data.homeTeam} performance...`,
+    `🌍 Cloud Sync: Connected to Global Sports Feed`,
+    `⚖️ AI Prediction: High momentum for ${data.homeScore >= data.awayScore ? data.homeTeam : data.awayTeam}`
+  ];
+  if (Math.random() > 0.7) {
+    const msg = syncMsgs[Math.floor(Math.random() * syncMsgs.length)];
+    const statusEl = document.getElementById('aiSyncText');
+    if (statusEl) statusEl.innerText = msg;
+  }
 
   // Update Stadium Name
   if (data.stadium) {
