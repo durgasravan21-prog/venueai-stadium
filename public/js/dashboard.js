@@ -435,9 +435,36 @@ socket.on('venue_update', data => {
   renderCrowdPanel(data);
 });
 
+// ─── Google AI Sync ───────────────────────────────────────────────────
+async function toggleWorldSync() {
+  const newState = !matchState.worldSyncMode;
+  try {
+    const res = await fetch('/api/match/sync', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ enabled: newState })
+    });
+    const d = await res.json();
+    matchState.worldSyncMode = d.enabled;
+    showToast(d.enabled ? '🌍 Google AI Sync ACTIVATED' : '⭕ Google AI Sync DISABLED');
+  } catch(e) { showToast('❌ Sync error'); }
+}
+
 // ─── Socket: Match Update ──────────────────────────────────────────────
 socket.on('match_update', data => {
   matchState = { ...matchState, ...data };
+  
+  // Update Sync UI
+  const syncBtn = document.getElementById('syncToggleBtn');
+  const syncInd = document.getElementById('syncIndicator');
+  if (syncBtn) {
+    syncBtn.innerText = data.worldSyncMode ? 'DEACTIVATE ⏹' : 'ACTIVATE 🤖';
+    syncBtn.style.background = data.worldSyncMode ? '#666' : '#db4437';
+  }
+  if (syncInd) {
+    syncInd.innerText = data.worldSyncMode ? 'Agent Active (Google)' : 'Agent Idle';
+    syncInd.style.color = data.worldSyncMode ? '#4285f4' : 'var(--text-muted)';
+  }
+
   setText('topScore', `${data.homeScore} : ${data.awayScore}`);
   setText('topStatus', data.minute > 0 ? `${data.minute}'` : data.status.replace(/_/g, ' ').toUpperCase());
   setText('ctrlHomeScore', data.homeScore);
@@ -448,10 +475,19 @@ socket.on('match_update', data => {
   // FIXED: Update Team Names, Sport, and Stadium from backend broadcast
   setText('ctrlTeamA', data.homeTeam);
   setText('ctrlTeamB', data.awayTeam);
-  const icon = (typeof sportIcons !== 'undefined' && sportIcons[data.sport]) ? sportIcons[data.sport] : '⚽';
-  setText('topTeamHome', `${icon} ${data.homeTeam}`);
-  setText('topTeamAway', `${data.awayTeam} 🔴`);
-  setText('teamAIcon', icon);
+  
+  // Cricket Bat/Bowl Icons Role Management (SWAP AFTER 1ST INNINGS)
+  let iconA = (typeof sportIcons !== 'undefined' && sportIcons[data.sport]) ? sportIcons[data.sport] : '⚽';
+  let iconB = '🔴';
+  if (data.sport === 'cricket') {
+    if (data.battingTeam === 'home') { iconA = '🏏'; iconB = '⚾'; }
+    else { iconA = '⚾'; iconB = '🏏'; }
+  }
+
+  setText('topTeamHome', `${iconA} ${data.homeTeam}`);
+  setText('topTeamAway', `${data.awayTeam} ${iconB}`);
+  setText('teamAIcon', iconA);
+  setText('teamBIcon', iconB);
   
 
 

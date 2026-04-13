@@ -439,6 +439,24 @@
           </div>
         </div>
 
+        <div class="card" style="margin-bottom:16px; border:1px solid #db443788; background:linear-gradient(to right, rgba(219,68,55,0.05), rgba(66,133,244,0.05));">
+          <div class="card-header">
+            <div class="card-title" style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:1.2rem;">🌍</span> <strong>Google AI Life-Sync Agent</strong>
+            </div>
+          </div>
+          <div class="card-body" style="display:flex; align-items:center; justify-content:space-between; padding:15px 20px;">
+            <div>
+              <div style="font-size:0.85rem; font-weight:700; color:#db4437;">Direct Google Match Connection</div>
+              <div style="font-size:0.72rem; color:var(--text-muted);">Sync scores & roles (Bat/Bowl) instantly from live world data.</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span id="syncIndicator" style="font-family:monospace; font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Agent Idle</span>
+              <button id="syncToggleBtn" class="btn" style="background:#db4437; color:#white; font-weight:800; border-radius:30px; padding:6px 18px; font-size:0.8rem;" onclick="toggleWorldSync()">ACTIVATE 🤖</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Live Scoreboard + Manual Score Update -->
         <div class="card" style="margin-bottom:16px;">
           <div class="card-header"><div class="card-title" id="matchSportLabel">⚽ Match Scoreboard</div></div>

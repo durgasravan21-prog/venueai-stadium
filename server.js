@@ -95,8 +95,42 @@ let matchState = {
   homeScore: 0,
   awayScore: 0,
   events: [],
-  attendance: 0
+  attendance: 0,
+  sport: 'football',
+  battingTeam: 'home', // 'home' or 'away' - used for Cricket
+  worldSyncMode: false // When active, AI Agent pulls data from 'Google' (simulated)
 };
+
+// Simulated Real-World AI Agent Connector
+function runWorldAgent() {
+  if (!matchState.worldSyncMode) return;
+
+  // Simulate no-delay Google updates
+  if (matchState.status === 'pre_match' && Math.random() < 0.1) {
+    matchState.status = 'first_half';
+    matchState.minute = 1;
+    addAlert('info', '🌍 GOOGLE SYNC: Match started in real-world feed!', 'match');
+  }
+
+  // Handle innings/halftime transitions automatically
+  if (matchState.status === 'first_half' && matchState.minute >= 45) {
+     matchState.status = 'halftime';
+     addAlert('info', '🌍 GOOGLE SYNC: Inning Break / Half-time detected.', 'match');
+  }
+
+  if (matchState.status === 'halftime' && Math.random() < 0.05) {
+     matchState.status = 'second_half';
+     matchState.battingTeam = 'away'; // Swap for Cricket
+     addAlert('warning', '🌍 GOOGLE SYNC: 2nd Innings/Half started! Roles swapped.', 'match');
+  }
+
+  // Auto-update scores from 'Google'
+  if (['first_half', 'second_half'].includes(matchState.status) && Math.random() < 0.02) {
+      if (Math.random() > 0.5) matchState.homeScore++;
+      else matchState.awayScore++;
+      io.emit('match_update', matchState);
+  }
+}
 
 // Entry Slots System
 let entrySlots = [];
@@ -338,6 +372,7 @@ function startSimulation() {
   simInterval = setInterval(() => {
     simulateCrowd();
     simulateMatch();
+    runWorldAgent(); // Call the AI Agent Sync
     generateRandomAlerts();
     processOrders();
     autoDispatchStaff();
@@ -399,6 +434,14 @@ app.post('/api/venue/settings', (req, res) => {
 // --- Match State ---
 app.get('/api/match', (req, res) => {
   res.json({ success: true, data: matchState });
+});
+
+app.post('/api/match/sync', (req, res) => {
+  const { enabled } = req.body;
+  matchState.worldSyncMode = !!enabled;
+  addAlert(enabled ? 'success' : 'warning', `🌍 Google AI Sync ${enabled ? 'CONNECTED' : 'DISCONNECTED'}`, 'match');
+  io.emit('match_update', matchState);
+  res.json({ success: true, enabled: matchState.worldSyncMode });
 });
 
 app.post('/api/match/control', (req, res) => {

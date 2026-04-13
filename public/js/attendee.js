@@ -68,10 +68,15 @@ socket.on('match_update', data => {
   let iconA = sportIcons[data.sport] || '🏟️';
   let iconB = iconA;
 
-  // Custom roles for Cricket (Batting vs Bowling)
+  // Custom roles for Cricket (Batting vs Bowling swap)
   if (data.sport === 'cricket') {
-    iconA = '🏏'; // Batting
-    iconB = '⚾'; // Bowling/Fielding
+    if (data.battingTeam === 'home') {
+      iconA = '🏏'; // Home Batting
+      iconB = '⚾'; // Away Bowling
+    } else {
+      iconA = '⚾'; // Home Bowling
+      iconB = '🏏'; // Away Batting
+    }
   }
 
   if (data.homeTeam) setText('heroTeamA', data.homeTeam);
