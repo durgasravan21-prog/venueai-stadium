@@ -649,7 +649,15 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
 .pill-red   { color:#f87171; }
 
 @media (max-width: 1024px) {
-  body { flex-direction: column !important; overflow-y: auto !important; height: auto !important; }
+  body { flex-direction: column !important; overflow-y: auto !important; height: auto !important; min-height: 100vh; }
+  .sidebar { width: 100% !important; flex: none !important; border-right: none; border-bottom: 2px solid var(--walnut-tan); position: relative !important; height: auto !important; max-height: none !important; }
+  .main-area { flex: none !important; width: 100% !important; overflow: visible !important; }
+  .content-area { overflow-y: visible !important; padding: 15px !important; }
+  .top-bar { flex-direction: column; gap: 10px; align-items: flex-start; height: auto !important; padding: 15px !important; }
+  .two-col, .three-col, .form-row { grid-template-columns: 1fr !important; gap: 15px !important; }
+  .overview-grid { grid-template-columns: 1fr 1fr !important; }
+  .card { margin-bottom: 15px !important; }
+}
   .sidebar { width: 100% !important; flex: none !important; border-right: none; border-bottom: 2px solid var(--walnut-tan); max-height: 250px; overflow-y: auto; }
   .main-area { flex: auto !important; overflow: visible !important; }
   .content-area { overflow-y: visible !important; }

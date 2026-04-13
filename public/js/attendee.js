@@ -269,14 +269,7 @@ function showTicket(d) {
   }
 }
 
-function resetBooking() {
-  localStorage.removeItem('venue_booking');
-  const grid    = document.getElementById('slotsGrid');
-  const display = document.getElementById('ticketDisplay');
-  if (grid)    grid.style.display = 'grid';
-  if (display) display.style.display = 'none';
-  fetchSlots();
-}
+/* resetBooking removed per user request */
 
 // ── Food Menu ─────────────────────────────────────────────────
 async function fetchMenu() {

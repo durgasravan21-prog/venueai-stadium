@@ -87,6 +87,7 @@ const VENUE = {
 
 // Match/Event State
 let matchState = {
+  stadium: 'metastadium',
   status: 'pre_match', // pre_match, first_half, halftime, second_half, extra_time, post_match
   minute: 0,
   homeTeam: 'Metro United',
@@ -961,6 +962,13 @@ io.on('connection', (socket) => {
   socket.emit('venue_update', getVenueState());
   socket.emit('match_update', matchState);
   socket.emit('alerts_init', alerts);
+
+  socket.on('admin_score_update', (data) => {
+    if (data.homeScore !== undefined) matchState.homeScore = parseInt(data.homeScore);
+    if (data.awayScore !== undefined) matchState.awayScore = parseInt(data.awayScore);
+    io.emit('match_update', matchState);
+    console.log(`Score updated via socket: ${matchState.homeScore} - ${matchState.awayScore}`);
+  });
 
   socket.on('request_route', (data) => {
     const routes = [

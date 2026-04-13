@@ -212,7 +212,9 @@ const sportControlLabels = {
 
 function updateStadium() {
   currentStadium = document.getElementById('stadiumSelect')?.value || 'metastadium';
-  showToast(`🏟️ Stadium updated to ${document.getElementById('stadiumSelect')?.options[document.getElementById('stadiumSelect').selectedIndex]?.text}`);
+  showToast(🏟️ Stadium updated to ${document.getElementById('stadiumSelect')?.options[document.getElementById('stadiumSelect').selectedIndex]?.text});
+  applyMatchConfig(); 
+}`);
 }
 
 function updateSport() {
