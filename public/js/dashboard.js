@@ -460,7 +460,11 @@ socket.on('alert', alert => {
   renderAllAlerts();
   refreshOrderKPIs();
 });
+const staffLocks = {};
 socket.on('staff_update', updated => {
+  // If we just manually sent a command, ignore server updates for 2 seconds to prevent flickering
+  if (staffLocks[updated.id] && Date.now() < staffLocks[updated.id]) return;
+  
   const idx = allStaff.findIndex(s => s.id === updated.id);
   if (idx >= 0) allStaff[idx] = updated;
   renderStaffGrid();
@@ -661,6 +665,9 @@ async function dispatchStaff(id) {
   const zone = prompt('Zone to dispatch to (north/south/east/west/vip):', 'north');
   if (!zone) return;
 
+  // Set local lock to prevent flickering while server processes
+  staffLocks[id] = Date.now() + 2000;
+
   // Optimistic UI update
   const s = allStaff.find(st => st.id === id);
   if (s) {
@@ -677,6 +684,9 @@ async function dispatchStaff(id) {
 }
 
 async function releaseStaff(id) {
+  // Set local lock to prevent flickering while server processes
+  staffLocks[id] = Date.now() + 2000;
+
   // Optimistic UI update
   const s = allStaff.find(st => st.id === id);
   if (s) {
