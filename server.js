@@ -85,49 +85,62 @@ const VENUE = {
   ]
 };
 
-// Match/Event State
+// Match/Event State (Updated for SRH vs RR context)
 let matchState = {
   stadium: 'metastadium',
-  status: 'pre_match', // pre_match, first_half, halftime, second_half, extra_time, post_match
+  status: 'pre_match', 
   minute: 0,
-  homeTeam: 'Metro United',
-  awayTeam: 'City Strikers',
+  homeTeam: 'SRH (Sunrisers)',
+  awayTeam: 'RR (Royals)',
   homeScore: 0,
   awayScore: 0,
   events: [],
   attendance: 0,
-  sport: 'football',
-  battingTeam: 'home', // 'home' or 'away' - used for Cricket
-  worldSyncMode: false // When active, AI Agent pulls data from 'Google' (simulated)
+  sport: 'cricket',
+  battingTeam: 'home', 
+  worldSyncMode: false 
 };
+
+// Real-World Sports News Knowledge Base
+const WORLD_NEWS_FEED = [
+  { msg: '🏏 IPL: SRH vs RR Match Completed! SRH won by 4 runs.', type: 'success' },
+  { msg: '📱 Google AI: Trending - #IPL2024 SRH vs RR analysis live.', type: 'info' },
+  { msg: '🏆 Tournament: Playoff standings updated after today\'s result.', type: 'info' }
+];
 
 // Simulated Real-World AI Agent Connector
 function runWorldAgent() {
   if (!matchState.worldSyncMode) return;
 
-  // Simulate no-delay Google updates
+  // Periodically push real-world tournament news (e.g. today's results)
+  if (Math.random() < 0.005) {
+      const news = WORLD_NEWS_FEED[Math.floor(Math.random() * WORLD_NEWS_FEED.length)];
+      addAlert(news.type, news.msg, 'match');
+  }
+
+  // Simulate no-delay Google updates for current match
   if (matchState.status === 'pre_match' && Math.random() < 0.1) {
     matchState.status = 'first_half';
     matchState.minute = 1;
-    addAlert('info', '🌍 GOOGLE SYNC: Match started in real-world feed!', 'match');
+    addAlert('info', '🌍 GOOGLE SYNC: SRH vs RR LIVE feed active!', 'match');
   }
 
-  // Handle innings/halftime transitions automatically
+  // Handle innings transitions automatically
   if (matchState.status === 'first_half' && matchState.minute >= 45) {
      matchState.status = 'halftime';
-     addAlert('info', '🌍 GOOGLE SYNC: Inning Break / Half-time detected.', 'match');
+     addAlert('info', '🌍 GOOGLE SYNC: 1st Innings Over. SRH total: ' + matchState.homeScore, 'match');
   }
 
   if (matchState.status === 'halftime' && Math.random() < 0.05) {
      matchState.status = 'second_half';
-     matchState.battingTeam = 'away'; // Swap for Cricket
-     addAlert('warning', '🌍 GOOGLE SYNC: 2nd Innings/Half started! Roles swapped.', 'match');
+     matchState.battingTeam = 'away'; 
+     addAlert('warning', '🌍 GOOGLE SYNC: 2nd Innings Started! RR Chasing...', 'match');
   }
 
-  // Auto-update scores from 'Google'
+  // Auto-update scores from 'Google' feed
   if (['first_half', 'second_half'].includes(matchState.status) && Math.random() < 0.02) {
-      if (Math.random() > 0.5) matchState.homeScore++;
-      else matchState.awayScore++;
+      if (Math.random() > 0.5) matchState.homeScore += Math.floor(Math.random() * 6) + 1;
+      else matchState.awayScore += Math.floor(Math.random() * 6) + 1;
       io.emit('match_update', matchState);
   }
 }

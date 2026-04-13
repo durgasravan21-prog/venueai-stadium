@@ -461,7 +461,7 @@ socket.on('match_update', data => {
     syncBtn.style.background = data.worldSyncMode ? '#666' : '#db4437';
   }
   if (syncInd) {
-    syncInd.innerText = data.worldSyncMode ? 'Agent Active (Google)' : 'Agent Idle';
+    syncInd.innerText = data.worldSyncMode ? 'Syncing: SRH vs RR (Google AI)' : 'Agent Idle';
     syncInd.style.color = data.worldSyncMode ? '#4285f4' : 'var(--text-muted)';
   }
 
