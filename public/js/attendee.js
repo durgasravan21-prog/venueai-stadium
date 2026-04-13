@@ -17,6 +17,7 @@ let isCartOpen  = false;
 document.addEventListener('DOMContentLoaded', () => {
   fetchMenu();
   fetchSlots();
+  fetchMatch(); // Initialize with current match state
   restoreBooking();
   restoreOrders();
   setInterval(tickETAs, 1000);
@@ -57,7 +58,24 @@ socket.on('venue_update', data => {
   renderGateStatus(data.gates);
 });
 
+// ─── Fetch Match State ────────────────────────────────────────
+async function fetchMatch() {
+  try {
+    const res = await fetch('/api/match');
+    const d = await res.json();
+    if (d.success) {
+      // Trigger update logic manually for initial state
+      updateMatchUI(d.data);
+    }
+  } catch (e) { console.error("Match fetch error", e); }
+}
+
+// ─── Socket: Match Update ──────────────────────────────────────────────
 socket.on('match_update', data => {
+  updateMatchUI(data);
+});
+
+function updateMatchUI(data) {
   // Cricket Formatting: Score/Wickets
   const hText = data.sport === 'cricket' ? `${data.homeScore}/${data.homeWickets}` : data.homeScore;
   const aText = data.sport === 'cricket' ? `${data.awayScore}/${data.awayWickets}` : data.awayScore;
@@ -86,11 +104,11 @@ socket.on('match_update', data => {
   // Custom roles for Cricket (Batting vs Bowling swap)
   if (data.sport === 'cricket') {
     if (data.battingTeam === 'home') {
-      iconA = '🏏'; // Home Batting
-      iconB = '⚾'; // Away Bowling
+      iconA = '🏏'; 
+      iconB = '⚾'; 
     } else {
-      iconA = '⚾'; // Home Bowling
-      iconB = '🏏'; // Away Batting
+      iconA = '⚾'; 
+      iconB = '🏏'; 
     }
   }
 
@@ -112,8 +130,8 @@ socket.on('match_update', data => {
     if (statusEl) statusEl.innerText = msg;
   }
 
-  // Update Stadium Name
-  if (data.stadium) {
+  // Update Stadium Name (PRIORITIZE data.stadiumName from AI Agent)
+  if (data.stadium || data.stadiumName) {
     const stadiumNames = {
       metastadium: 'MetaStadium Arena',
       eden: 'Eden Gardens',
@@ -125,9 +143,8 @@ socket.on('match_update', data => {
       indira: 'Indira Gandhi Arena',
       smc: 'SMC Indoor Complex',
       hyderabad_stadium: 'Rajiv Gandhi Intl Stadium',
-      ipl: 'IPL T20 Tournament', t20: 'T20 Internationals', epl: 'Premier League', nba: 'NBA Pro Basketball', tennis: 'Grand Slam Tennis', volleyball: 'Pro Volley League', kabaddi: 'Pro Kabaddi League', hockey: 'World Hockey Series',
     };
-    const stName = stadiumNames[data.stadium] || 'VenueAI Stadium';
+    const stName = data.stadiumName || stadiumNames[data.stadium] || 'VenueAI Stadium';
     const titleEl = document.getElementById('heroTitle');
     if (titleEl) {
       const words = stName.split(' ');
@@ -139,13 +156,14 @@ socket.on('match_update', data => {
       }
     }
   }
-
   // Goal toast
   if (data.events && data.events.length) {
     const last = data.events[data.events.length - 1];
-    if (last && last.type === 'goal') showToast(`${icon} GOAL! ${last.team} at ${last.minute}'`, 'success');
+    if (last && (last.type === 'goal' || last.type === 'alert')) {
+       showToast(`${last.msg || (last.team + ' scored!')}`, 'success');
+    }
   }
-});
+}
 
 socket.on('alert', alert => {
   if (alert.type === 'danger') showToast(alert.message, 'danger');

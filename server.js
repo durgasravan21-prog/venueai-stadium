@@ -488,6 +488,7 @@ app.post('/api/match/sync', (req, res) => {
     matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
     matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
     matchState.stadium = GOOGLE_REALITY_FEED.stadium;
+    matchState.stadiumName = GOOGLE_REALITY_FEED.stadiumName;
     matchState.sport = GOOGLE_REALITY_FEED.sport;
     matchState.status = 'first_half'; 
     matchState.minute = 10; // Jump into the action
