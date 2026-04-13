@@ -108,11 +108,26 @@ const WORLD_NEWS_FEED = [
   { msg: '🏆 Tournament: Playoff standings updated after today\'s result.', type: 'info' }
 ];
 
+// Real-World Ground Truth (The AI Agent's Master Data)
+const GOOGLE_REALITY_FEED = {
+  homeTeam: 'SRH (Sunrisers)',
+  awayTeam: 'RR (Royals)',
+  stadium: 'hyderabad_stadium',
+  stadiumName: 'Rajiv Gandhi Intl Stadium',
+  sport: 'cricket'
+};
+
 // Simulated Real-World AI Agent Connector
 function runWorldAgent() {
   if (!matchState.worldSyncMode) return;
 
-  // Periodically push real-world tournament news (e.g. today's results)
+  // ENSURE AGENT IS MASTER: Force state to match reality feed if drift occurs
+  if (matchState.homeTeam !== GOOGLE_REALITY_FEED.homeTeam) matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
+  if (matchState.awayTeam !== GOOGLE_REALITY_FEED.awayTeam) matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
+  if (matchState.stadium !== GOOGLE_REALITY_FEED.stadium) matchState.stadium = GOOGLE_REALITY_FEED.stadium;
+  if (matchState.sport !== GOOGLE_REALITY_FEED.sport) matchState.sport = GOOGLE_REALITY_FEED.sport;
+
+  // Periodically push real-world tournament news
   if (Math.random() < 0.005) {
       const news = WORLD_NEWS_FEED[Math.floor(Math.random() * WORLD_NEWS_FEED.length)];
       addAlert(news.type, news.msg, 'match');
@@ -122,19 +137,19 @@ function runWorldAgent() {
   if (matchState.status === 'pre_match' && Math.random() < 0.1) {
     matchState.status = 'first_half';
     matchState.minute = 1;
-    addAlert('info', '🌍 GOOGLE SYNC: SRH vs RR LIVE feed active!', 'match');
+    addAlert('info', `🌍 GOOGLE SYNC: ${matchState.homeTeam} vs ${matchState.awayTeam} LIVE!`, 'match');
   }
 
   // Handle innings transitions automatically
   if (matchState.status === 'first_half' && matchState.minute >= 45) {
      matchState.status = 'halftime';
-     addAlert('info', '🌍 GOOGLE SYNC: 1st Innings Over. SRH total: ' + matchState.homeScore, 'match');
+     addAlert('info', `🌍 GOOGLE SYNC: 1st Innings Over at ${GOOGLE_REALITY_FEED.stadiumName}.`, 'match');
   }
 
   if (matchState.status === 'halftime' && Math.random() < 0.05) {
      matchState.status = 'second_half';
      matchState.battingTeam = 'away'; 
-     addAlert('warning', '🌍 GOOGLE SYNC: 2nd Innings Started! RR Chasing...', 'match');
+     addAlert('warning', `🌍 GOOGLE SYNC: 2nd Innings Started! ${matchState.awayTeam} Chasing...`, 'match');
   }
 
   // Auto-update scores from 'Google' feed
@@ -452,6 +467,17 @@ app.get('/api/match', (req, res) => {
 app.post('/api/match/sync', (req, res) => {
   const { enabled } = req.body;
   matchState.worldSyncMode = !!enabled;
+  
+  // FORCE OVERWRITE: If enabled, immediately jump to Real-World context
+  if (enabled) {
+    matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
+    matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
+    matchState.stadium = GOOGLE_REALITY_FEED.stadium;
+    matchState.sport = GOOGLE_REALITY_FEED.sport;
+    matchState.status = 'first_half'; 
+    matchState.minute = 10; // Jump into the action
+  }
+
   addAlert(enabled ? 'success' : 'warning', `🌍 Google AI Sync ${enabled ? 'CONNECTED' : 'DISCONNECTED'}`, 'match');
   io.emit('match_update', matchState);
   res.json({ success: true, enabled: matchState.worldSyncMode });

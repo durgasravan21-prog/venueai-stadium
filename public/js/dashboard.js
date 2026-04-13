@@ -494,6 +494,19 @@ socket.on('match_update', data => {
   const hi = document.getElementById('homeScoreInput');
   const ai = document.getElementById('awayScoreInput');
   const ss = document.getElementById('sportSelect');
+  const stSelect = document.getElementById('stadiumSelect');
+  const tAName = document.getElementById('teamAName');
+  const tBName = document.getElementById('teamBName');
+
+  if (ss) ss.disabled = data.worldSyncMode;
+  if (stSelect) stSelect.disabled = data.worldSyncMode;
+  if (tAName) tAName.disabled = data.worldSyncMode;
+  if (tBName) tBName.disabled = data.worldSyncMode;
+  
+  // Set stadium selection based on Agent response if active
+  if (data.worldSyncMode && stSelect) {
+     stSelect.value = data.stadium;
+  }
   const sts = document.getElementById('stadiumSelect');
 
   // Input fields are now NEVER overwritten by the socket heartbeat to prevent 'snapping back'
