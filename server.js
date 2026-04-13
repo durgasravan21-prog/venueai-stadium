@@ -469,24 +469,39 @@ app.get('/api/entry/slots', (req, res) => {
   res.json({ success: true, data: entrySlots });
 });
 
+const bookedTicketIPs = new Set();
 app.post('/api/entry/book', (req, res) => {
+  const userIp = req.ip || req.connection?.remoteAddress || 'unknown';
+  if (bookedTicketIPs.has(userIp)) {
+    return res.status(400).json({ success: false, error: 'You have already booked a ticket. Only one ticket allowed per person.' });
+  }
+
   const { slotId, count = 1 } = req.body;
+  if (count > 1) {
+    return res.status(400).json({ success: false, error: 'Only 1 ticket allowed per booking.' });
+  }
+
   const slot = entrySlots.find(s => s.id === slotId);
   if (!slot) return res.status(404).json({ success: false, error: 'Slot not found' });
   if (slot.booked + count > slot.capacity) {
     return res.status(400).json({ success: false, error: 'Slot is full' });
   }
+  
   slot.booked += count;
   if (slot.booked >= slot.capacity) slot.status = 'full';
+  
   const ticket = {
     id: uuidv4(),
     slotId: slot.id,
     timeWindow: `${slot.startTime} - ${slot.endTime}`,
-    count,
+    count: 1,
     gate: VENUE.gates[Math.floor(Math.random() * VENUE.gates.length)].id,
     qrCode: `QR-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
   };
+  
   analytics.totalEntries += count;
+  bookedTicketIPs.add(userIp); // Restrict future bookings
+  
   res.json({ success: true, data: ticket });
 });
 
