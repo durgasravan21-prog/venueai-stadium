@@ -434,13 +434,7 @@ socket.on('match_update', data => {
   setText('topTeamAway', `${data.awayTeam} 🔴`);
   setText('teamAIcon', icon);
   
-  if (typeof currentSport !== 'undefined' && currentSport !== data.sport && typeof updateSport === 'function') {
-    const sportSelect = document.getElementById('sportSelect');
-    if(sportSelect) {
-      sportSelect.value = data.sport;
-      currentSport = data.sport;
-    }
-  }
+
 
   const hi = document.getElementById('homeScoreInput');
   const ai = document.getElementById('awayScoreInput');
