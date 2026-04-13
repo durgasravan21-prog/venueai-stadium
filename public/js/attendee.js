@@ -75,6 +75,19 @@ socket.on('match_update', data => {
   updateMatchUI(data);
 });
 
+const STADIUM_MAP = {
+  metastadium: 'MetaStadium Arena',
+  eden: 'Eden Gardens',
+  wankhede: 'Wankhede Stadium',
+  chepauk: 'Chepauk Stadium',
+  chinnaswamy: 'Chinnaswamy Stadium',
+  saltlake: 'Salt Lake Stadium',
+  jawaharlal: 'Jawaharlal Nehru Stadium',
+  indira: 'Indira Gandhi Arena',
+  smc: 'SMC Indoor Complex',
+  hyderabad_stadium: 'Rajiv Gandhi Intl Stadium',
+};
+
 function updateMatchUI(data) {
   // Cricket Formatting: Score/Wickets
   const hText = data.sport === 'cricket' ? `${data.homeScore}/${data.homeWickets}` : data.homeScore;
@@ -130,32 +143,19 @@ function updateMatchUI(data) {
     if (statusEl) statusEl.innerText = msg;
   }
 
-  // Update Stadium Name (PRIORITIZE data.stadiumName from AI Agent)
-  if (data.stadium || data.stadiumName) {
-    const stadiumNames = {
-      metastadium: 'MetaStadium Arena',
-      eden: 'Eden Gardens',
-      wankhede: 'Wankhede Stadium',
-      chepauk: 'Chepauk Stadium',
-      chinnaswamy: 'Chinnaswamy Stadium',
-      saltlake: 'Salt Lake Stadium',
-      jawaharlal: 'Jawaharlal Nehru Stadium',
-      indira: 'Indira Gandhi Arena',
-      smc: 'SMC Indoor Complex',
-      hyderabad_stadium: 'Rajiv Gandhi Intl Stadium',
-    };
-    const stName = data.stadiumName || stadiumNames[data.stadium] || 'VenueAI Stadium';
-    const titleEl = document.getElementById('heroTitle');
-    if (titleEl) {
-      const words = stName.split(' ');
-      if (words.length > 1) {
-         const last = words.pop();
-         titleEl.innerHTML = `${words.join(' ')} <span class="gradient-text">${last}</span>`;
-      } else {
-         titleEl.innerHTML = stName;
-      }
+  // Force Update Stadium Name (PRIORITIZE data.stadiumName or Mapping)
+  const stName = data.stadiumName || STADIUM_MAP[data.stadium] || 'Rajiv Gandhi Intl Stadium';
+  const titleEl = document.getElementById('heroTitle');
+  if (titleEl) {
+    const words = stName.split(' ');
+    if (words.length > 1) {
+       const last = words.pop();
+       titleEl.innerHTML = `${words.join(' ')} <span class="gradient-text">${last}</span>`;
+    } else {
+       titleEl.innerHTML = stName;
     }
   }
+
   // Goal toast
   if (data.events && data.events.length) {
     const last = data.events[data.events.length - 1];
