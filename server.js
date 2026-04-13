@@ -635,7 +635,8 @@ app.post('/api/staff/add', (req, res) => {
   
   const newStaff = {
     id: 'S' + Math.floor(Math.random() * 10000).toString().padStart(4, '0'),
-    name, role, zone: zone || 'unassigned', status: 'available', currentTask: null
+    name, role, zone: zone || 'unassigned', status: 'available', currentTask: null,
+    manualDispatch: false
   };
   staff.push(newStaff);
   syncStaff(newStaff);

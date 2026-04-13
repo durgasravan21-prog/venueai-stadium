@@ -255,12 +255,15 @@ function applyMatchConfig() {
 }
 
 // ─── Manual Score Control ─────────────────────────────────────────────
-function adjustScore(team, delta) {
-  const inputId = team === 'home' ? 'homeScoreInput' : 'awayScoreInput';
+function incrementScore(inputId, delta) {
   const el = document.getElementById(inputId);
   if (!el) return;
   const newVal = Math.max(0, parseInt(el.value || 0) + delta);
   el.value = newVal;
+
+  // Optimistically update local state so socket broadcast doesn't overwrite it
+  if (inputId === 'homeScoreInput') matchState.homeScore = newVal;
+  if (inputId === 'awayScoreInput') matchState.awayScore = newVal;
 }
 
 async function pushManualScore() {
@@ -444,11 +447,9 @@ socket.on('match_update', data => {
   const ss = document.getElementById('sportSelect');
   const sts = document.getElementById('stadiumSelect');
 
-  if (hi && document.activeElement !== hi) hi.value = data.homeScore;
-  if (ai && document.activeElement !== ai) ai.value = data.awayScore;
-  if (ss && document.activeElement !== ss) ss.value = data.sport;
-  if (sts && document.activeElement !== sts) sts.value = data.stadium;
-  
+  // Input fields are now NEVER overwritten by the socket heartbeat to prevent 'snapping back'
+  // Labels (topScore, etc.) above still update to show the current server-side reality.
+
   if (data.events && data.events.length > allMatchEvents.length) {
     allMatchEvents = data.events;
     renderMatchEvents();
@@ -665,16 +666,31 @@ async function deleteStaff(id) {
 async function dispatchStaff(id) {
   const zone = prompt('Zone to dispatch to (north/south/east/west/vip):', 'north');
   if (!zone) return;
+
+  // Optimistic UI update
+  const s = allStaff.find(st => st.id === id);
+  if (s) {
+    s.status = 'dispatched';
+    s.zone = zone;
+    s.currentTask = 'Manual dispatch';
+    renderStaffGrid(); // Refresh UI immediately
+  }
+
   await fetch(`/api/staff/${id}/dispatch`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ zone, task: 'Manual dispatch' })
   });
-  fetchStaff();
 }
 
 async function releaseStaff(id) {
+  // Optimistic UI update
+  const s = allStaff.find(st => st.id === id);
+  if (s) {
+    s.status = 'available';
+    s.currentTask = null;
+    renderStaffGrid(); // Refresh UI immediately
+  }
   await fetch(`/api/staff/${id}/release`, { method: 'POST' });
-  fetchStaff();
 }
 
 // ─── Orders ────────────────────────────────────────────────────────────
