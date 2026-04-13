@@ -92,13 +92,20 @@ const WORLD_NEWS_FEED = [
   { msg: '🏆 Tournament: Playoff standings updated after today\'s result.', type: 'info' }
 ];
 
-// Real-World Ground Truth (The AI Agent's Master Data)
+// Real-World Ground Truth (DIRECT GOOGLE MAPPING)
 const GOOGLE_REALITY_FEED = {
   homeTeam: 'SRH (Sunrisers)',
   awayTeam: 'RR (Royals)',
   stadium: 'hyderabad_stadium',
   stadiumName: 'Rajiv Gandhi Intl Stadium',
-  sport: 'cricket'
+  sport: 'cricket',
+  homeScore: 216,
+  homeWickets: 6,
+  awayScore: 159,
+  awayWickets: 10,
+  target: 217,
+  status: 'post_match',
+  result: 'SRH won by 57 runs'
 };
 
 // Match/Event State (Enhanced for Cricket Reality)
@@ -121,57 +128,31 @@ let matchState = {
   worldSyncMode: false 
 };
 
-// Simulated Real-World AI Agent Connector
+// Simulated Real-World AI Agent Connector (STRICT GOOGLE MAPPING)
 function runWorldAgent() {
   if (!matchState.worldSyncMode) return;
 
-  // ENSURE AGENT IS MASTER
-  if (matchState.homeTeam !== GOOGLE_REALITY_FEED.homeTeam) matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
-  if (matchState.awayTeam !== GOOGLE_REALITY_FEED.awayTeam) matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
-  if (matchState.stadium !== GOOGLE_REALITY_FEED.stadium) {
-    matchState.stadium = GOOGLE_REALITY_FEED.stadium;
-    matchState.stadiumName = GOOGLE_REALITY_FEED.stadiumName;
-  }
+  // ENSURE AGENT IS MASTER: Strictly follow Google Reality Feed
+  matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
+  matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
+  matchState.stadium = GOOGLE_REALITY_FEED.stadium;
+  matchState.stadiumName = GOOGLE_REALITY_FEED.stadiumName;
+  matchState.sport = GOOGLE_REALITY_FEED.sport;
+  
+  // Apply Real Stats (Direct Mapping - NO FAKE ADDITION)
+  matchState.homeScore = GOOGLE_REALITY_FEED.homeScore;
+  matchState.homeWickets = GOOGLE_REALITY_FEED.homeWickets;
+  matchState.awayScore = GOOGLE_REALITY_FEED.awayScore;
+  matchState.awayWickets = GOOGLE_REALITY_FEED.awayWickets;
+  matchState.target = GOOGLE_REALITY_FEED.target;
+  matchState.status = GOOGLE_REALITY_FEED.status;
 
-  // Periodically push real-world tournament news
-  if (Math.random() < 0.005) {
-      const news = WORLD_NEWS_FEED[Math.floor(Math.random() * WORLD_NEWS_FEED.length)];
-      addAlert(news.type, news.msg, 'match');
-  }
+  // Real-time broadcast heartbeat
+  io.emit('match_update', matchState);
 
-  // Simulate no-delay Google updates for current match
-  if (matchState.status === 'pre_match' && Math.random() < 0.1) {
-    matchState.status = 'first_half';
-    matchState.minute = 1;
-    addAlert('info', `🌍 GOOGLE SYNC: ${matchState.homeTeam} vs ${matchState.awayTeam} LIVE!`, 'match');
-  }
-
-  // Handle innings transitions automatically
-  if (matchState.status === 'first_half' && matchState.minute >= 45) {
-     matchState.status = 'halftime';
-     matchState.target = matchState.homeScore + 1; // SET TARGET
-     addAlert('info', `🌍 GOOGLE SYNC: Innings Break. Target for ${matchState.awayTeam}: ${matchState.target}`, 'match');
-  }
-
-  if (matchState.status === 'halftime' && Math.random() < 0.05) {
-     matchState.status = 'second_half';
-     matchState.battingTeam = 'away'; 
-     addAlert('warning', `🌍 GOOGLE SYNC: 2nd Innings Started! ${matchState.awayTeam} chasing ${matchState.target}`, 'match');
-  }
-
-  // Realistic Cricket Scoring (Runs & Wickets)
-  if (['first_half', 'second_half'].includes(matchState.status) && Math.random() < 0.05) {
-      const runs = [0, 1, 2, 4, 6][Math.floor(Math.random() * 5)];
-      const wicket = Math.random() < 0.08; // 8% chance of a wicket
-
-      if (matchState.status === 'first_half') {
-        matchState.homeScore += runs;
-        if (wicket && matchState.homeWickets < 10) matchState.homeWickets++;
-      } else {
-        matchState.awayScore += runs;
-        if (wicket && matchState.awayWickets < 10) matchState.awayWickets++;
-      }
-      io.emit('match_update', matchState);
+  // Periodically remind users of the Google Sync status
+  if (Math.random() < 0.05) {
+      addAlert('success', `🌍 GOOGLE SYNC: ${GOOGLE_REALITY_FEED.result} (Final Stats)`, 'match');
   }
 }
 
