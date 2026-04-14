@@ -157,7 +157,7 @@ const DAILY_MATCH_SCHEDULE = {
     { sid: 'msg', home: 'NY Knicks', away: 'MIAMI HEAT', sport: 'basketball', name: 'Madison Square Garden' },
     { sid: 'eden_gardens', home: 'KKR (Knights)', away: 'CSK (Super Kings)', sport: 'cricket', name: 'Eden Gardens' },
     { sid: 'chinnaswamy', home: 'RCB (Challengers)', away: 'MI (Indians)', sport: 'cricket', name: 'M. Chinnaswamy Stadium' },
-    { sid: 'chepauk', home: 'CSK (Super Kings)', away: 'GT (Titans)', sport: 'cricket', name: 'M. A. Chidambaram Stadium' }
+    { sid: 'chepauk', home: 'CSK (Super Kings)', away: 'KKR (Knights)', sport: 'cricket', name: 'M. A. Chidambaram Stadium' }
   ],
   '2026-04-15': [
     { sid: 'eden_gardens', home: 'KKR (Knights)', away: 'MI (Indians)', sport: 'cricket', name: 'Eden Gardens' },
