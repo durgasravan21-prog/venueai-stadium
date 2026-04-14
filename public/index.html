@@ -12,12 +12,32 @@
 
 <div id="app">
 
+ <div id="stadiumOverlay" class="stadium-overlay">
+    <div class="overlay-content">
+      <div class="logo">VenueAI <span class="gradient-text">World</span></div>
+      <h2>Select Your Stadium</h2>
+      <p>Enter the venue name or select from active grounds</p>
+      
+      <div id="stadiumGrid" class="stadium-grid">
+         <!-- Populated via JS -->
+      </div>
+      
+      <div class="custom-entry">
+        <input type="text" id="customStadiumId" placeholder="Enter Stadium ID (e.g. eden)">
+        <button onclick="selectStadiumById()">Enter Gate</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ══ HERO ══ -->
-  <section class="hero">
+  <section class="hero" id="mainHero" style="display:none;">
     <div class="hero-bg"></div>
     <div class="hero-content">
       <div class="hero-badge">🏟️ LIVE NOW</div>
-      <h1 id="heroTitle">VenueAI <span class="gradient-text">Stadium</span></h1>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <h1 id="heroTitle">VenueAI <span class="gradient-text">Stadium</span></h1>
+        <button class="switch-venue-btn" onclick="showStadiumSelector()">🔄 Change</button>
+      </div>
       <p class="hero-subtitle">Your AI-powered stadium companion</p>
 
       <!-- Match Card -->
@@ -29,9 +49,9 @@
           </div>
           <div class="match-score-block">
             <div class="match-score">
-              <span id="homeScore">0</span>
+              <span id="homeScore">0</span><span class="wickets-box" id="homeWicketsWrap">/<span id="homeWickets">0</span></span>
               <span class="score-sep">:</span>
-              <span id="awayScore">0</span>
+              <span id="awayScore">0</span><span class="wickets-box" id="awayWicketsWrap">/<span id="awayWickets">0</span></span>
             </div>
             <div class="match-status" id="matchStatus">PRE-MATCH</div>
             <div class="match-minute" id="matchMinute"></div>
@@ -106,21 +126,9 @@
       <div class="zone-cards" id="zoneCards"></div>
 
       <!-- AI Queue Vision -->
-      <h2 class="section-title" style="margin-top:2rem">🤖 AI Gate Vision</h2>
-      <div class="ai-cctv-card">
-        <div class="ai-cctv-video">
-          <video autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;opacity:0.7">
-            <source src="https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4">
-          </video>
-          <div class="ai-bbox" style="top:30%;left:25%"></div>
-          <div class="ai-bbox" style="top:20%;left:55%"></div>
-          <div class="ai-bbox" style="top:40%;left:68%"></div>
-          <div class="ai-overlay-badge"><span style="color:#10b981">●</span> Live | AI: <span id="aiConfidence">97.3%</span></div>
-        </div>
-        <div class="ai-cctv-footer">
-          <span>Gate A — North Entrance</span>
-          <span class="queue-badge short">● Short Queue</span>
-        </div>
+      <h2 class="section-title" style="margin-top:2rem">🤖 AI Venue Vision</h2>
+      <div id="cctvGrid" class="cctv-grid">
+        <!-- Populated via JS -->
       </div>
 
       <!-- Live Alerts -->

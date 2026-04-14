@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/(css|js|images|assets)/(.*)",
+      "destination": "/public/$1/$2"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/server.js"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

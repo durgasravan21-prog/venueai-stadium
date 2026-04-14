@@ -7,6 +7,7 @@
 const socket = io();
 
 // ─── State ────────────────────────────────────────────────────────────
+// ─── State ────────────────────────────────────────────────────────────
 let densityChart = null;
 let allStaff = [];
 let allOrders = [];
@@ -19,7 +20,7 @@ let unreadAlerts = 0;
 let venueState = null;
 let matchState = { homeScore: 0, awayScore: 0, status: 'pre_match', minute: 0 };
 let currentSport = 'cricket';
-let currentStadium = 'metastadium';
+let currentStadium = localStorage.getItem('dash_stadium_id');
 let scannerStream = null;
 let scannerInterval = null;
 let recentScansLog = [];
@@ -27,6 +28,12 @@ let weatherData = null;
 
 // ─── Boot ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  loadStadiumsForLogin();
+  
+  if (currentStadium) {
+    loginToStadium(currentStadium);
+  }
+  
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
       e.preventDefault();
@@ -50,6 +57,43 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(runAIAnalysis, 3000);     // AI analysis every 3s
   setInterval(updateMatchMinute, 60000); // match minute every 60s
 });
+
+async function loadStadiumsForLogin() {
+  try {
+    const res = await fetch('/api/stadiums');
+    const data = await res.json();
+    if (data.success) {
+      const select = document.getElementById('loginStadiumSelect');
+      const dashSelect = document.getElementById('stadiumSelect');
+      const options = data.data.map(s => `<option value="${s.id}">${s.sport.toUpperCase()}: ${s.name}, ${s.city}</option>`).join('');
+      if (select) select.innerHTML = `<option value="">-- Select Stadium --</option>` + options;
+      if (dashSelect) dashSelect.innerHTML = options;
+    }
+  } catch (e) {
+    console.error("Failed to load stadiums for login.");
+  }
+}
+
+function loginToStadium(sid) {
+  const selectedId = sid || document.getElementById('loginStadiumSelect').value;
+  if (!selectedId) {
+     alert("Please select a stadium to manage.");
+     return;
+  }
+  
+  currentStadium = selectedId;
+  localStorage.setItem('dash_stadium_id', selectedId);
+  
+  // Join Room
+  socket.emit('join_stadium', selectedId);
+  
+  // UI Transition
+  const overlay = document.getElementById('dashboardLogin');
+  if (overlay) overlay.style.display = 'none';
+  
+  // Trigger initial fetch
+  fetchMatchState();
+}
 
 // ─── Time ──────────────────────────────────────────────────────────────
 function updateTime() {
@@ -269,7 +313,7 @@ function applyMatchConfig() {
   fetch('/api/match/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ teamA, teamB, sport: currentSport, stadium: currentStadium })
+    body: JSON.stringify({ teamA, teamB, sport: currentSport, stadiumId: currentStadium })
   }).catch(() => {});
 }
 
@@ -299,7 +343,7 @@ async function pushManualScore() {
     await fetch('/api/match/score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ homeScore: home, awayScore: away, sport: currentSport })
+      body: JSON.stringify({ homeScore: home, awayScore: away, sport: currentSport, stadiumId: currentStadium })
     });
     showToast(`✅ Score pushed — ${home} : ${away}`);
   } catch (e) {
@@ -314,7 +358,7 @@ async function matchControl(action) {
     await fetch('/api/match/control', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action })
+      body: JSON.stringify({ action, stadiumId: currentStadium })
     });
     showToast(`✅ Match state updated: ${action.toUpperCase()}`);
   } catch (e) {
@@ -436,12 +480,23 @@ socket.on('venue_update', data => {
 });
 
 // ─── Google AI Sync ───────────────────────────────────────────────────
+async function fetchMatchState() {
+  try {
+    const res = await fetch(`/api/match?stadiumId=${currentStadium || 'hyderabad_stadium'}`);
+    const data = await res.json();
+    if (data.success) {
+       matchState = data.data;
+       socket.emit('join_stadium', currentStadium || 'hyderabad_stadium');
+    }
+  } catch (e) { console.error("Initial match fetch failed"); }
+}
+
 async function toggleWorldSync() {
   const newState = !matchState.worldSyncMode;
   try {
     const res = await fetch('/api/match/sync', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ enabled: newState })
+      body: JSON.stringify({ enabled: newState, stadiumId: currentStadium })
     });
     const d = await res.json();
     matchState.worldSyncMode = d.enabled;
@@ -664,7 +719,7 @@ function appendAlertToOverview(alert) {
 // ─── Staff ─────────────────────────────────────────────────────────────
 async function fetchStaff() {
   try {
-    const res = await fetch('/api/staff');
+    const res = await fetch(`/api/staff?stadiumId=${currentStadium}`);
     const data = await res.json();
     allStaff = data.data;
     renderStaffGrid();
@@ -723,7 +778,7 @@ async function addStaff() {
   if (!name) { showToast('⚠️ Enter staff name'); return; }
   await fetch('/api/staff/add', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, role, zone })
+    body: JSON.stringify({ name, role, zone, stadiumId: currentStadium })
   });
   document.getElementById('newStaffName').value = '';
   showToast('✅ Staff added');
@@ -776,7 +831,7 @@ async function releaseStaff(id) {
 // ─── Orders ────────────────────────────────────────────────────────────
 async function fetchOrders() {
   try {
-    const res = await fetch('/api/food/orders');
+    const res = await fetch(`/api/food/orders?stadiumId=${currentStadium}`);
     const data = await res.json();
     allOrders = data.data;
     renderOrdersGrid();
@@ -828,7 +883,7 @@ async function completeOrder(id) {
 // ─── Alerts ────────────────────────────────────────────────────────────
 async function loadInitialAlerts() {
   try {
-    const res = await fetch('/api/alerts');
+    const res = await fetch(`/api/alerts?stadiumId=${currentStadium}`);
     const data = await res.json();
     allAlerts = data.data;
     renderAllAlerts();
@@ -904,7 +959,7 @@ async function matchControl(action) {
   try {
     const res = await fetch('/api/match/control', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, sport: currentSport })
+      body: JSON.stringify({ action, sport: currentSport, stadiumId: currentStadium })
     });
     const data = await res.json();
     if (data.success) {
@@ -922,7 +977,7 @@ async function updateVenueSettings() {
   if (!cap || parseInt(cap) < 1000) { showToast('⚠️ Enter a valid capacity'); return; }
   const res = await fetch('/api/venue/settings', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ capacity: parseInt(cap) })
+    body: JSON.stringify({ capacity: parseInt(cap), stadiumId: currentStadium })
   });
   const data = await res.json();
   if (data.success) showToast(`✅ Capacity updated to ${parseInt(cap).toLocaleString('en-IN')}`);
@@ -934,7 +989,7 @@ async function createManualAlert() {
   if (!msg) { showToast('⚠️ Enter a message'); return; }
   await fetch('/api/alerts/create', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, message: msg, source: 'manual' })
+    body: JSON.stringify({ type, message: msg, source: 'manual', stadiumId: currentStadium })
   });
   const el = document.getElementById('alertMessage');
   if (el) el.value = '';
@@ -944,7 +999,7 @@ async function createManualAlert() {
 // ─── Menu Management ───────────────────────────────────────────────────
 async function fetchMenuItems() {
   try {
-    const res = await fetch('/api/food/menu');
+    const res = await fetch(`/api/food/menu?stadiumId=${currentStadium}`);
     const data = await res.json();
     menuItems = data.data || [];
     renderMenuManagement();

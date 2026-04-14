@@ -11,15 +11,20 @@ const { v4: uuidv4 } = require('uuid');
 const { initDB, syncStaff, syncOrder } = require('./db');
 const path = require('path');
 const crypto = require('crypto');
+const { db } = require('./firebase');
 
-// ── Razorpay config (swap with real keys before production) ──────────
-const RAZORPAY_KEY_ID     = process.env.RAZORPAY_KEY_ID     || 'rzp_test_DEMO_KEY_ID';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'rzp_test_DEMO_SECRET';
+// ── Razorpay config (Set these in Vercel Environment Variables) ──────────
+const RAZORPAY_KEY_ID     = process.env.RAZORPAY_KEY_ID     || '';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 let Razorpay;
 try {
   Razorpay = require('razorpay');
 } catch(e) { Razorpay = null; }
-const razorpay = Razorpay ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET }) : null;
+const razorpay = (Razorpay && RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) 
+  ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET }) 
+  : null;
+
+if (!razorpay) console.warn("⚠️ Razorpay: Payment gateway not configured. Transactions will be simulated.");
 
 // Pending payments (waiting for gateway success)
 const pendingPayments = {};
@@ -45,54 +50,158 @@ app.use(limiter);
 // DATA MODELS & SIMULATION ENGINE
 // ============================================================
 
-// Venue Configuration
-const VENUE = {
-  name: "MetaStadium Arena",
-  capacity: 60000,
-  zones: [
-    { id: 'north', name: 'North Stand', capacity: 15000, current: 0, gates: ['A', 'B'] },
-    { id: 'south', name: 'South Stand', capacity: 15000, current: 0, gates: ['C', 'D'] },
-    { id: 'east', name: 'East Wing', capacity: 12000, current: 0, gates: ['E', 'F'] },
-    { id: 'west', name: 'West Wing', capacity: 12000, current: 0, gates: ['G', 'H'] },
-    { id: 'vip', name: 'VIP Lounge', capacity: 6000, current: 0, gates: ['V1'] }
+// Map of Stadium ID -> Venue Infrastructure (Gates, Concessions, Zones)
+let stadiumVenues = {};
+
+// Default template for a new stadium venue
+function createVenueTemplate(stadium) {
+  return {
+    id: stadium.id,
+    name: stadium.name,
+    city: stadium.city,
+    sport: stadium.sport,
+    capacity: stadium.capacity || 50000,
+    zones: [
+      { id: 'north', name: 'Premium North', current: 0, capacity: Math.floor((stadium.capacity||50000)*0.25) },
+      { id: 'south', name: 'General South', current: 0, capacity: Math.floor((stadium.capacity||50000)*0.25) },
+      { id: 'east',  name: 'East Wing',     current: 0, capacity: Math.floor((stadium.capacity||50000)*0.20) },
+      { id: 'west',  name: 'West Wing',     current: 0, capacity: Math.floor((stadium.capacity||50000)*0.20) },
+      { id: 'vip',   name: 'Global VIP',    current: 0, capacity: Math.floor((stadium.capacity||50000)*0.10) }
+    ],
+    gates: [
+      { id: 'A', name: 'Gate A', zone: 'north', throughput: 800, current_flow: 0, status: 'open', queue_length: 0 },
+      { id: 'B', name: 'Gate B', zone: 'north', throughput: 800, current_flow: 0, status: 'open', queue_length: 0 },
+      { id: 'C', name: 'Gate C', zone: 'south', throughput: 800, current_flow: 0, status: 'open', queue_length: 0 },
+      { id: 'D', name: 'Gate D', zone: 'south', throughput: 800, current_flow: 0, status: 'open', queue_length: 0 },
+      { id: 'E', name: 'Gate E', zone: 'east', throughput: 600, current_flow: 0, status: 'open', queue_length: 0 },
+      { id: 'F', name: 'Gate F', zone: 'east', throughput: 600, current_flow: 0, status: 'open', queue_length: 0 },
+      { id: 'G', name: 'Gate G', zone: 'west', throughput: 600, current_flow: 0, status: 'open', queue_length: 0 },
+      { id: 'H', name: 'Gate H', zone: 'west', throughput: 600, current_flow: 0, status: 'open', queue_length: 0 },
+      { id: 'V1', name: 'VIP Gate', zone: 'vip', throughput: 300, current_flow: 0, status: 'open', queue_length: 0 }
+    ],
+    concessions: [
+      { id: 'f1', name: 'Stadium Bites', zone: 'north', type: 'food', queue_time: 0, orders_pending: 0, staff: 4, status: 'open' },
+      { id: 'f2', name: 'Quick Drinks', zone: 'north', type: 'beverage', queue_time: 0, orders_pending: 0, staff: 3, status: 'open' },
+      { id: 'f3', name: 'South Grill', zone: 'south', type: 'food', queue_time: 0, orders_pending: 0, staff: 4, status: 'open' },
+      { id: 'f7', name: 'VIP Dining', zone: 'vip', type: 'premium', queue_time: 0, orders_pending: 0, staff: 6, status: 'open' }
+    ],
+    restrooms: [
+      { id: 'r1', zone: 'north', occupancy: 0, capacity: 40, wait_time: 0 },
+      { id: 'r2', zone: 'south', occupancy: 0, capacity: 40, wait_time: 0 },
+      { id: 'r5', zone: 'vip', occupancy: 0, capacity: 20, wait_time: 0 }
+    ],
+    cctv: [
+      { id: 'cam_01', name: 'Main Entrance', feed: 'https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&q=80&w=800', status: 'online' },
+      { id: 'cam_02', name: 'North Stand', feed: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=800', status: 'online' },
+      { id: 'cam_03', name: 'Food Court', feed: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800', status: 'online' },
+      { id: 'cam_04', name: 'Gate C Queue', feed: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&q=80&w=800', status: 'online' }
+    ]
+  };
+}
+
+function getVenueState(sid) {
+  return stadiumVenues[sid || 'hyderabad_stadium'] || stadiumVenues['hyderabad_stadium'];
+}
+
+// ============================================================
+// GLOBAL KNOWLEDGE BASE: NATIONAL & INTERNATIONAL GROUNDS
+// ============================================================
+
+const STADIUMS_KNOWLEDGE_BASE = [
+  // CRICKET
+  { id: 'hyderabad_stadium', name: 'Rajiv Gandhi Intl Stadium', city: 'Hyderabad', sport: 'cricket', country: 'India', capacity: 55000 },
+  { id: 'eden_gardens', name: 'Eden Gardens', city: 'Kolkata', sport: 'cricket', country: 'India', capacity: 66000 },
+  { id: 'lords', name: 'Lord\'s Cricket Ground', city: 'London', sport: 'cricket', country: 'UK', capacity: 31000 },
+  { id: 'mcg', name: 'Melbourne Cricket Ground', city: 'Melbourne', sport: 'cricket', country: 'Australia', capacity: 100000 },
+  { id: 'ahmedabad_stadium', name: 'Narendra Modi Stadium', city: 'Ahmedabad', sport: 'cricket', country: 'India', capacity: 132000 },
+  
+  // FOOTBALL
+  { id: 'salt_lake', name: 'Salt Lake Stadium', city: 'Kolkata', sport: 'football', country: 'India', capacity: 85000 },
+  { id: 'wembley', name: 'Wembley Stadium', city: 'London', sport: 'football', country: 'UK', capacity: 90000 },
+  { id: 'camp_nou', name: 'Camp Nou', city: 'Barcelona', sport: 'football', country: 'Spain', capacity: 99000 },
+  { id: 'old_trafford', name: 'Old Trafford', city: 'Manchester', sport: 'football', country: 'UK', capacity: 74000 },
+  
+  // BASKETBALL & INDOOR
+  { id: 'msg', name: 'Madison Square Garden', city: 'New York', sport: 'basketball', country: 'USA', capacity: 19500 },
+  { id: 'staples', name: 'Crypto.com Arena', city: 'Los Angeles', sport: 'basketball', country: 'USA', capacity: 19000 },
+  { id: 'ig_arena', name: 'Indira Gandhi Arena', city: 'Delhi', sport: 'basketball', country: 'India', capacity: 14000 },
+  
+  // VOLLEYBALL & HOCKEY
+  { id: 'national_hockey', name: 'Major Dhyan Chand National Stadium', city: 'Delhi', sport: 'hockey', country: 'India', capacity: 16000 },
+  { id: 'smc_complex', name: 'SMC Indoor Complex', city: 'Surat', sport: 'volleyball', country: 'India', capacity: 7000 },
+  
+  // TENNIS
+  { id: 'wimbledon', name: 'Wimbledon Center Court', city: 'London', sport: 'tennis', country: 'UK', capacity: 15000 }
+];
+
+// Map of Stadium ID -> Current Live State & Infrastructure
+let stadiumStates = {};
+STADIUMS_KNOWLEDGE_BASE.forEach(s => {
+  stadiumVenues[s.id] = createVenueTemplate(s);
+});
+
+// --- Daily Match Schedule (AI Control Center) ---
+const DAILY_MATCH_SCHEDULE = {
+  // Today's matches (AI will auto-select based on Date)
+  '2024-04-14': [
+    { sid: 'hyderabad_stadium', home: 'SRH (Sunrisers)', away: 'RR (Royals)', sport: 'cricket', name: 'Rajiv Gandhi Intl Stadium' },
+    { sid: 'wembley', home: 'Manchester City', away: 'Real Madrid', sport: 'football', name: 'Wembley Stadium' },
+    { sid: 'msg', home: 'NY Knicks', away: 'LA Lakers', sport: 'basketball', name: 'Madison Square Garden' }
   ],
-  gates: [
-    { id: 'A', name: 'Gate A', zone: 'north', throughput: 800, current_flow: 0, status: 'open', queue_length: 0 },
-    { id: 'B', name: 'Gate B', zone: 'north', throughput: 800, current_flow: 0, status: 'open', queue_length: 0 },
-    { id: 'C', name: 'Gate C', zone: 'south', throughput: 800, current_flow: 0, status: 'open', queue_length: 0 },
-    { id: 'D', name: 'Gate D', zone: 'south', throughput: 800, current_flow: 0, status: 'open', queue_length: 0 },
-    { id: 'E', name: 'Gate E', zone: 'east', throughput: 600, current_flow: 0, status: 'open', queue_length: 0 },
-    { id: 'F', name: 'Gate F', zone: 'east', throughput: 600, current_flow: 0, status: 'open', queue_length: 0 },
-    { id: 'G', name: 'Gate G', zone: 'west', throughput: 600, current_flow: 0, status: 'open', queue_length: 0 },
-    { id: 'H', name: 'Gate H', zone: 'west', throughput: 600, current_flow: 0, status: 'open', queue_length: 0 },
-    { id: 'V1', name: 'VIP Gate', zone: 'vip', throughput: 300, current_flow: 0, status: 'open', queue_length: 0 }
-  ],
-  concessions: [
-    { id: 'f1', name: 'Stadium Bites', zone: 'north', type: 'food', queue_time: 0, orders_pending: 0, staff: 4, status: 'open' },
-    { id: 'f2', name: 'Quick Drinks', zone: 'north', type: 'beverage', queue_time: 0, orders_pending: 0, staff: 3, status: 'open' },
-    { id: 'f3', name: 'South Grill', zone: 'south', type: 'food', queue_time: 0, orders_pending: 0, staff: 4, status: 'open' },
-    { id: 'f4', name: 'Refreshment Hub', zone: 'south', type: 'beverage', queue_time: 0, orders_pending: 0, staff: 3, status: 'open' },
-    { id: 'f5', name: 'East Eats', zone: 'east', type: 'food', queue_time: 0, orders_pending: 0, staff: 3, status: 'open' },
-    { id: 'f6', name: 'West Feast', zone: 'west', type: 'food', queue_time: 0, orders_pending: 0, staff: 3, status: 'open' },
-    { id: 'f7', name: 'VIP Dining', zone: 'vip', type: 'premium', queue_time: 0, orders_pending: 0, staff: 6, status: 'open' }
-  ],
-  restrooms: [
-    { id: 'r1', zone: 'north', occupancy: 0, capacity: 40, wait_time: 0 },
-    { id: 'r2', zone: 'south', occupancy: 0, capacity: 40, wait_time: 0 },
-    { id: 'r3', zone: 'east', occupancy: 0, capacity: 30, wait_time: 0 },
-    { id: 'r4', zone: 'west', occupancy: 0, capacity: 30, wait_time: 0 },
-    { id: 'r5', zone: 'vip', occupancy: 0, capacity: 20, wait_time: 0 }
+  '2024-04-15': [
+    { sid: 'eden_gardens', home: 'KKR (Knights)', away: 'MI (Indians)', sport: 'cricket', name: 'Eden Gardens' },
+    { sid: 'camp_nou', home: 'Barcelona', away: 'PSG', sport: 'football', name: 'Camp Nou' },
+    { sid: 'ig_arena', home: 'India', away: 'Australia', sport: 'hockey', name: 'Major Dhyan Chand Natl Stadium' }
   ]
 };
 
-// Real-World Sports News Knowledge Base
-const WORLD_NEWS_FEED = [
-  { msg: '🏏 IPL: SRH vs RR Match Completed! SRH won by 4 runs.', type: 'success' },
-  { msg: '📱 Google AI: Trending - #IPL2024 SRH vs RR analysis live.', type: 'info' },
-  { msg: '🏆 Tournament: Playoff standings updated after today\'s result.', type: 'info' }
-];
+// Initialize all stadium states
+STADIUMS_KNOWLEDGE_BASE.forEach(s => {
+  stadiumStates[s.id] = {
+    stadium: s.id,
+    stadiumName: s.name,
+    city: s.city,
+    sport: s.sport,
+    country: s.country,
+    status: 'pre_match',
+    minute: 0,
+    homeTeam: s.sport === 'cricket' ? 'Home' : 'Home Team',
+    awayTeam: s.sport === 'cricket' ? 'Away' : 'Away Team',
+    homeScore: 0,
+    homeWickets: 0,
+    awayScore: 0,
+    awayWickets: 0,
+    target: 0,
+    events: [],
+    attendance: 0,
+    battingTeam: 'home',
+    worldSyncMode: true, // Auto-sync by default
+    weather: { temp: 32, humidity: 45, condition: 'Clear' }
+  };
+});
 
-// Real-World Ground Truth (DIRECT GOOGLE MAPPING)
+function refreshDailySchedule() {
+  const today = new Date().toISOString().split('T')[0];
+  const schedule = DAILY_MATCH_SCHEDULE[today] || [];
+  
+  schedule.forEach(match => {
+    if (stadiumStates[match.sid]) {
+      const state = stadiumStates[match.sid];
+      state.homeTeam = match.home;
+      state.awayTeam = match.away;
+      state.stadiumName = match.name;
+      state.sport = match.sport;
+      state.status = 'live'; // Start the match
+      console.log(`📅 Daily Refresh: Activated ${match.home} vs ${match.away} at ${match.name}`);
+    }
+  });
+}
+
+// Check schedule every hour
+setInterval(refreshDailySchedule, 3600000);
+refreshDailySchedule();
+
+// REAL-WORLD SYNC DATA (Snapshot for SRH vs RR)
 const GOOGLE_REALITY_FEED = {
   homeTeam: 'SRH (Sunrisers)',
   awayTeam: 'RR (Royals)',
@@ -108,52 +217,86 @@ const GOOGLE_REALITY_FEED = {
   result: 'SRH won by 57 runs'
 };
 
-// Match/Event State (Enhanced for Cricket Reality)
-let matchState = {
-  stadium: 'hyderabad_stadium',
-  stadiumName: 'Rajiv Gandhi Intl Stadium',
-  status: 'pre_match', 
-  minute: 0,
-  homeTeam: 'SRH (Sunrisers)',
-  awayTeam: 'RR (Royals)',
-  homeScore: 0,
-  homeWickets: 0,
-  awayScore: 0,
-  awayWickets: 0,
-  target: 0, // Set after 1st innings
-  events: [],
-  attendance: 0,
-  sport: 'cricket',
-  battingTeam: 'home', 
-  worldSyncMode: false 
-};
+// --- Firebase Persistence ---
+async function saveStadiumData() {
+  if (!db) return;
+  try {
+    const statesBatch = db.batch();
+    Object.keys(stadiumStates).forEach(sid => {
+      const docRef = db.collection('stadiumStates').doc(sid);
+      statesBatch.set(docRef, stadiumStates[sid]);
+    });
 
-// Simulated Real-World AI Agent Connector (STRICT GOOGLE MAPPING)
-function runWorldAgent() {
-  if (!matchState.worldSyncMode) return;
+    const venuesBatch = db.batch();
+    Object.keys(stadiumVenues).forEach(sid => {
+      const docRef = db.collection('stadiumVenues').doc(sid);
+      venuesBatch.set(docRef, stadiumVenues[sid]);
+    });
 
-  // ENSURE AGENT IS MASTER: Strictly follow Google Reality Feed
-  matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
-  matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
-  matchState.stadium = GOOGLE_REALITY_FEED.stadium;
-  matchState.stadiumName = GOOGLE_REALITY_FEED.stadiumName;
-  matchState.sport = GOOGLE_REALITY_FEED.sport;
-  
-  // Apply Real Stats (Direct Mapping - NO FAKE ADDITION)
-  matchState.homeScore = GOOGLE_REALITY_FEED.homeScore;
-  matchState.homeWickets = GOOGLE_REALITY_FEED.homeWickets;
-  matchState.awayScore = GOOGLE_REALITY_FEED.awayScore;
-  matchState.awayWickets = GOOGLE_REALITY_FEED.awayWickets;
-  matchState.target = GOOGLE_REALITY_FEED.target;
-  matchState.status = GOOGLE_REALITY_FEED.status;
-
-  // Real-time broadcast heartbeat
-  io.emit('match_update', matchState);
-
-  // Periodically remind users of the Google Sync status
-  if (Math.random() < 0.05) {
-      addAlert('success', `🌍 GOOGLE SYNC: ${GOOGLE_REALITY_FEED.result} (Final Stats)`, 'match');
+    await Promise.all([statesBatch.commit(), venuesBatch.commit()]);
+    console.log("💾 Persistence: Stadium states and venues saved to Firebase.");
+  } catch (e) {
+    console.error("❌ Persistence Save Error:", e.message);
   }
+}
+
+async function loadStadiumData() {
+  if (!db) return;
+  try {
+    const statesSnap = await db.collection('stadiumStates').get();
+    statesSnap.forEach(doc => {
+      stadiumStates[doc.id] = doc.data();
+    });
+
+    const venuesSnap = await db.collection('stadiumVenues').get();
+    venuesSnap.forEach(doc => {
+      stadiumVenues[doc.id] = doc.data();
+    });
+    console.log("📖 Persistence: Loaded stadium data from Firebase.");
+  } catch (e) {
+    console.error("❌ Persistence Load Error:", e.message);
+  }
+}
+
+// Initialize persistence
+loadStadiumData();
+setInterval(saveStadiumData, 60000); // Save every 60 seconds
+
+/**
+ * World Agent Logic (Multi-Stadium Support)
+ */
+function runWorldAgent() {
+  Object.keys(stadiumStates).forEach(sid => {
+    const matchState = stadiumStates[sid];
+    if (!matchState.worldSyncMode) return;
+
+    // Simulate weather variations
+    matchState.weather.temp = 28 + Math.floor(Math.random() * 10);
+    matchState.weather.humidity = 40 + Math.floor(Math.random() * 20);
+
+    // IF GOOGLE SYNC IS ON for THIS stadium (or if it's the primary Hyderabad match)
+    if (sid === 'hyderabad_stadium' || sid === GOOGLE_REALITY_FEED.stadium) {
+      matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
+      matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
+      matchState.homeScore = GOOGLE_REALITY_FEED.homeScore;
+      matchState.homeWickets = GOOGLE_REALITY_FEED.homeWickets;
+      matchState.awayScore = GOOGLE_REALITY_FEED.awayScore;
+      matchState.awayWickets = GOOGLE_REALITY_FEED.awayWickets;
+      matchState.target = GOOGLE_REALITY_FEED.target;
+      matchState.status = GOOGLE_REALITY_FEED.status;
+      matchState.stadiumName = GOOGLE_REALITY_FEED.stadiumName;
+      matchState.sport = GOOGLE_REALITY_FEED.sport;
+    } else {
+      // Auto-simulate if no real feed
+      simulateMatch(sid);
+    }
+
+    // Broadcast to the specific Stadium Room
+    io.to(`stadium_${sid}`).emit('match_update', matchState);
+    
+    // Also broadcast stadium name update if it changed
+    io.to(`stadium_${sid}`).emit('venue_update', stadiumVenues[sid]);
+  });
 }
 
 // Entry Slots System
@@ -203,7 +346,7 @@ for (let i = 1; i <= 30; i++) {
     id: `staff_${i}`,
     name: `Staff ${i}`,
     role: i <= 10 ? 'security' : i <= 20 ? 'service' : 'medical',
-    zone: VENUE.zones[i % 5].id,
+    zone: ['north','south','east','west','vip'][i % 5],
     status: 'available',
     currentTask: null
   });
@@ -230,7 +373,13 @@ let analytics = {
 // SIMULATION ENGINE
 // ============================================================
 
-function simulateCrowd() {
+
+function simulateCrowd(stadiumId) {
+  const sid = stadiumId || 'hyderabad_stadium';
+  const matchState = stadiumStates[sid];
+  const VENUE = stadiumVenues[sid];
+  if(!matchState || !VENUE) return;
+
   const isMatch = ['first_half', 'second_half', 'extra_time'].includes(matchState.status);
   const isHalftime = matchState.status === 'halftime';
   const isPreMatch = matchState.status === 'pre_match';
@@ -289,18 +438,22 @@ function simulateCrowd() {
 
   // Update attendance
   matchState.attendance = VENUE.zones.reduce((sum, z) => sum + z.current, 0);
+  // analytics is global for now, but we could make it per stadium if needed
   analytics.peakCrowd = Math.max(analytics.peakCrowd, matchState.attendance);
 
   // Record history
   analytics.crowdHistory.push({
+    stadiumId: sid,
     time: new Date().toISOString(),
     count: matchState.attendance,
     minute: matchState.minute
   });
-  if (analytics.crowdHistory.length > 100) analytics.crowdHistory.shift();
+  if (analytics.crowdHistory.length > 500) analytics.crowdHistory.shift();
 }
 
-function autoDispatchStaff() {
+function autoDispatchStaff(sid) {
+  const VENUE = stadiumVenues[sid];
+  if (!VENUE) return;
   VENUE.zones.forEach(zone => {
     // Only check if utilization is super high
     if (zone.current / zone.capacity > 0.85) {
@@ -309,69 +462,91 @@ function autoDispatchStaff() {
       if (idleStaff) {
         idleStaff.zone = zone.id;
         idleStaff.status = 'dispatched';
-        idleStaff.currentTask = 'Autonomous crowd control triggered by AI density threshold';
+        idleStaff.currentTask = `Autonomous crowd control triggered by AI density threshold at ${VENUE.name}`;
         syncStaff(idleStaff);
         
-        addAlert('warning', `🤖 AI SYSTEM: Autonomously dispatched ${idleStaff.name} to ${zone.name} to manage critical density.`, 'system');
-        io.emit('staff_update', idleStaff);
+        addAlert('warning', `🤖 AI SYSTEM: Autonomously dispatched ${idleStaff.name} to ${zone.name} at ${VENUE.name}`, 'system', sid);
+        io.to(`stadium_${sid}`).emit('staff_update', idleStaff);
       }
     }
   });
 }
 
-let matchTickCount = 0;
-function simulateMatch() {
-  if (matchState.status === 'pre_match' || matchState.status === 'post_match' || matchState.status === 'halftime') return;
+function simulateMatch(sid) {
+  const matchState = stadiumStates[sid];
+  if (!matchState || matchState.status === 'pre_match' || matchState.status === 'post_match' || matchState.status === 'halftime' || matchState.worldSyncMode) return;
 
-  matchTickCount++;
+  matchState.tick = (matchState.tick || 0) + 1;
   
-  if (matchTickCount >= 4) {
-      matchTickCount = 0;
+  if (matchState.tick >= 4) {
+      matchState.tick = 0;
       matchState.minute++;
   }
 
-  if (Math.random() < 0.005) {
-      const isHome = Math.random() > 0.45;
-      if (isHome) matchState.homeScore++;
-      else matchState.awayScore++;
-      const team = isHome ? matchState.homeTeam : matchState.awayTeam;
-      matchState.events.push({ minute: matchState.minute, type: 'goal', team });
+  // Cricket Innings Logic
+  if (matchState.sport === 'cricket') {
+    if (matchState.battingTeam === 'home' && matchState.homeWickets >= 10) {
+      matchState.battingTeam = 'away';
+      matchState.target = matchState.homeScore + 1;
+      addAlert('info', `🏏 First innings over! ${matchState.awayTeam} needs ${matchState.target} to win.`, 'match', sid);
+    } else if (matchState.battingTeam === 'away' && (matchState.awayWickets >= 10 || (matchState.target > 0 && matchState.awayScore >= matchState.target))) {
+      matchState.status = 'post_match';
+      const winner = matchState.awayScore >= matchState.target ? matchState.awayTeam : matchState.homeTeam;
+      addAlert('success', `🏁 Match Over! ${winner} won the game!`, 'match', sid);
+    }
+  }
+
+  if (Math.random() < 0.01) {
+      const isHome = matchState.battingTeam === 'home';
+      const scoringTeam = isHome ? 'home' : 'away';
+      
+      if (Math.random() > 0.3) {
+        // Run/Goal
+        if (scoringTeam === 'home') matchState.homeScore += (matchState.sport === 'cricket' ? Math.ceil(Math.random() * 6) : 1);
+        else matchState.awayScore += (matchState.sport === 'cricket' ? Math.ceil(Math.random() * 6) : 1);
+      } else if (matchState.sport === 'cricket') {
+        // Wicket
+        if (scoringTeam === 'home') matchState.homeWickets++;
+        else matchState.awayWickets++;
+      }
+
+      const teamName = isHome ? matchState.homeTeam : matchState.awayTeam;
       const icon = matchState.sport === 'cricket' ? '🏏' : matchState.sport === 'basketball' ? '🏀' : '⚽';
-      addAlert('success', `${icon} EVENT! ${team} scores at ${matchState.minute}'!`, 'match');
-      io.emit('match_update', matchState);
+      
+      io.to(`stadium_${sid}`).emit('match_update', matchState);
   }
 }
 
-function addAlert(type, message, source) {
+function addAlert(type, message, source, sid) {
   const alert = {
     id: alertIdCounter++,
     type, // info, warning, danger, success
     message,
     source, // system, match, crowd, safety
+    stadiumId: sid,
     timestamp: new Date().toISOString(),
     acknowledged: false
   };
   alerts.unshift(alert);
   if (alerts.length > 50) alerts.pop();
-  io.emit('alert', alert);
+  if (sid) io.to(`stadium_${sid}`).emit('alert', alert);
+  else io.emit('alert', alert);
   return alert;
 }
 
-// Generate random alerts
-function generateRandomAlerts() {
+function generateRandomAlerts(sid) {
+  const VENUE = stadiumVenues[sid];
+  if (!VENUE) return;
   const alertTypes = [
-    { type: 'warning', msg: 'High crowd density detected near Gate C', source: 'crowd' },
-    { type: 'info', msg: 'Weather update: Temperature 28°C, Clear sky', source: 'system' },
-    { type: 'warning', msg: 'Restroom R2 occupancy at 90%', source: 'system' },
-    { type: 'info', msg: 'Parking lot P3 is now full. Redirecting to P4.', source: 'system' },
-    { type: 'danger', msg: 'Medical assistance requested at Section E-14', source: 'safety' },
-    { type: 'info', msg: 'South Grill running low on burger patties', source: 'system' },
-    { type: 'warning', msg: 'Exit pathway 3 congestion above threshold', source: 'crowd' }
+    { type: 'warning', msg: `High crowd density detected near Gate C in ${VENUE.name}`, source: 'crowd' },
+    { type: 'info', msg: `Weather update: Temperature 28°C, Clear sky at ${VENUE.name}`, source: 'system' },
+    { type: 'warning', msg: `Restroom R2 occupancy at 90% in ${VENUE.name}`, source: 'system' },
+    { type: 'danger', msg: `Medical assistance requested at Section E-14 in ${VENUE.name}`, source: 'safety' }
   ];
 
-  if (Math.random() < 0.15) {
+  if (Math.random() < 0.05) {
     const a = alertTypes[Math.floor(Math.random() * alertTypes.length)];
-    addAlert(a.type, a.msg, a.source);
+    addAlert(a.type, a.msg, a.source, sid);
   }
 }
 
@@ -383,32 +558,37 @@ function processOrders() {
       if (order.remainingTime <= 0) {
         order.status = 'ready';
         syncOrder(order);
-        io.emit('order_update', order);
+        io.to(`stadium_${order.stadiumId}`).emit('order_update', order);
       }
     }
   });
 }
 
 // Main simulation loop (runs every 2 seconds)
-let simInterval = null;
-function startSimulation() {
-  if (simInterval) return;
-  simInterval = setInterval(() => {
-    simulateCrowd();
-    simulateMatch();
-    runWorldAgent(); // Call the AI Agent Sync
-    generateRandomAlerts();
-    processOrders();
-    autoDispatchStaff();
-
-    // Broadcast state
-    io.emit('venue_update', getVenueState());
-    io.emit('match_update', matchState);
-  }, 500);
+function runSimulation() {
+  Object.keys(stadiumStates).forEach(sid => {
+    simulateCrowd(sid);
+    simulateMatch(sid);
+    generateRandomAlerts(sid);
+    autoDispatchStaff(sid);
+  });
+  processOrders();
 }
 
-function getVenueState() {
+// Start periods
+setInterval(runSimulation, 2000);
+setInterval(runWorldAgent, 3000);
+
+// ============================================================
+// REST API ROUTES
+// ============================================================
+
+// Helper to get consistent stadium stats
+function getStadiumStats(sid) {
+  const VENUE = stadiumVenues[sid] || stadiumVenues['hyderabad_stadium'];
+  const matchState = stadiumStates[sid] || stadiumStates['hyderabad_stadium'];
   return {
+    name: VENUE.name,
     zones: VENUE.zones,
     gates: VENUE.gates,
     concessions: VENUE.concessions,
@@ -425,83 +605,107 @@ function getVenueState() {
 
 // --- Venue State ---
 app.get('/api/venue', (req, res) => {
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
   res.json({
     success: true,
-    data: {
-      name: VENUE.name,
-      ...getVenueState()
-    }
+    data: getStadiumStats(sid)
   });
 });
 
+app.post('/api/stadium/:id/venue', (req, res) => {
+  const sid = req.params.id;
+  if (stadiumVenues[sid]) {
+    stadiumVenues[sid] = { ...stadiumVenues[sid], ...req.body };
+    
+    // IF stadium name changed, update the match state too for consistency
+    if (req.body.name && stadiumStates[sid]) {
+      stadiumStates[sid].stadiumName = req.body.name;
+    }
+
+    io.to(`stadium_${sid}`).emit('venue_update', stadiumVenues[sid]);
+    res.json({ success: true, data: stadiumVenues[sid] });
+  } else {
+    res.status(404).json({ success: false, message: 'Stadium not found' });
+  }
+});
+
 app.get('/api/venue/zones', (req, res) => {
-  res.json({ success: true, data: VENUE.zones });
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  res.json({ success: true, data: stadiumVenues[sid]?.zones || [] });
 });
 
 app.get('/api/venue/gates', (req, res) => {
-  res.json({ success: true, data: VENUE.gates });
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  res.json({ success: true, data: stadiumVenues[sid]?.gates || [] });
 });
 
 app.post('/api/venue/settings', (req, res) => {
+  const sid = req.body.stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid];
   const { capacity } = req.body;
-  if (capacity && capacity > 0) {
+  if (VENUE && capacity && capacity > 0) {
     const ratio = capacity / VENUE.capacity;
     VENUE.capacity = capacity;
     VENUE.zones.forEach(z => {
       z.capacity = Math.floor(z.capacity * ratio);
     });
-    addAlert('info', `Stadium capacity dynamically updated to ${capacity.toLocaleString()}`, 'system');
+    addAlert('info', `[${VENUE.name}] Capacity updated to ${capacity.toLocaleString()}`, 'system', sid);
   }
-  res.json({ success: true, data: getVenueState() });
+  res.json({ success: true, data: getStadiumStats(sid) });
+});
+
+// --- Stadium Listing ---
+app.get('/api/stadiums', (req, res) => {
+  res.json({ success: true, data: STADIUMS_KNOWLEDGE_BASE });
 });
 
 // --- Match State ---
 app.get('/api/match', (req, res) => {
-  res.json({ success: true, data: matchState });
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  const state = stadiumStates[sid] || stadiumStates['hyderabad_stadium'];
+  res.json({ success: true, data: state });
 });
 
 app.post('/api/match/sync', (req, res) => {
-  const { enabled } = req.body;
+  const { enabled, stadiumId } = req.body;
+  const sid = stadiumId || 'hyderabad_stadium';
+  const matchState = stadiumStates[sid];
+  
+  if (!matchState) return res.status(404).json({ success:false, error:'Stadium not found' });
+
   matchState.worldSyncMode = !!enabled;
   
-  // FORCE OVERWRITE: If enabled, immediately jump to Real-World context
-  if (enabled) {
+  if (enabled && sid === 'hyderabad_stadium') {
     matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
     matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
-    matchState.stadium = GOOGLE_REALITY_FEED.stadium;
-    matchState.stadiumName = GOOGLE_REALITY_FEED.stadiumName;
-    matchState.sport = GOOGLE_REALITY_FEED.sport;
-    matchState.status = 'first_half'; 
-    matchState.minute = 10; // Jump into the action
+    matchState.status = GOOGLE_REALITY_FEED.status;
   }
 
-  addAlert(enabled ? 'success' : 'warning', `🌍 Google AI Sync ${enabled ? 'CONNECTED' : 'DISCONNECTED'}`, 'match');
-  io.emit('match_update', matchState);
+  addAlert(enabled ? 'success' : 'warning', `🌍 [${matchState.stadiumName}] Google AI Sync ${enabled ? 'CONNECTED' : 'DISCONNECTED'}`, 'match');
+  io.to(`stadium_${sid}`).emit('match_update', matchState);
   res.json({ success: true, enabled: matchState.worldSyncMode });
 });
 
 app.post('/api/match/control', (req, res) => {
-  const { action } = req.body;
+  const { action, stadiumId } = req.body;
+  const sid = stadiumId || 'hyderabad_stadium';
+  const matchState = stadiumStates[sid];
+  if (!matchState) return res.status(404).json({ success:false });
+
   switch (action) {
     case 'start':
       matchState.status = 'first_half';
       if(matchState.minute === 0) matchState.minute = 1;
-      addAlert('info', 'Match has started! First half underway.', 'match');
+      addAlert('info', `Match started at ${matchState.stadiumName}`, 'match');
       break;
     case 'halftime':
       matchState.status = 'halftime';
-      addAlert('info', 'Halftime break initiated.', 'match');
       break;
     case 'second_half':
       matchState.status = 'second_half';
-      if(matchState.minute < 45) matchState.minute = 45;
-      addAlert('info', 'Second half begins!', 'match');
       break;
     case 'end':
       matchState.status = 'post_match';
-      if(matchState.minute < 90) matchState.minute = 90;
-      addAlert('info', 'Match concluded.', 'match');
-      break;
     case 'reset':
       matchState = {
         stadium: matchState.stadium || 'metastadium',
@@ -521,27 +725,36 @@ app.post('/api/match/control', (req, res) => {
 
 // MANUAL SCORE PUSH — admin sets exact score, broadcasts to all attendees
 app.post('/api/match/score', (req, res) => {
-  const { homeScore, awayScore, sport } = req.body;
+  const { homeScore, awayScore, sport, stadiumId } = req.body;
+  const sid = stadiumId || 'hyderabad_stadium';
+  const matchState = stadiumStates[sid];
+  if (!matchState) return res.status(404).json({ success:false });
+
   if (homeScore !== undefined) matchState.homeScore = parseInt(homeScore);
   if (awayScore !== undefined) matchState.awayScore = parseInt(awayScore);
   if (sport) matchState.sport = sport;
+
   const icon = sport === 'cricket' ? '🏏' : sport === 'basketball' ? '🏀' : sport === 'volleyball' ? '🏐' : '⚽';
   if (homeScore !== awayScore || homeScore > 0) {
-    addAlert('success', `${icon} Score Update — ${matchState.homeTeam} ${matchState.homeScore} : ${matchState.awayScore} ${matchState.awayTeam}`, 'match');
+    addAlert('success', `[${matchState.stadiumName}] ${icon} Score Update — ${matchState.homeTeam} ${matchState.homeScore} : ${matchState.awayScore} ${matchState.awayTeam}`, 'match');
   }
-  io.emit('match_update', matchState);
+  io.to(`stadium_${sid}`).emit('match_update', matchState);
   res.json({ success: true, data: matchState });
 });
 
 // MATCH CONFIG — update team names, sport, stadium
 app.post('/api/match/config', (req, res) => {
-  const { teamA, teamB, sport, stadium } = req.body;
+  const { teamA, teamB, sport, stadiumId } = req.body;
+  const sid = stadiumId || 'hyderabad_stadium';
+  const matchState = stadiumStates[sid];
+  if (!matchState) return res.status(404).json({ success:false });
+
   if (teamA) matchState.homeTeam = teamA;
   if (teamB) matchState.awayTeam = teamB;
   if (sport) matchState.sport = sport;
-  if (stadium) matchState.stadium = stadium;
-  io.emit('match_update', matchState);
-  addAlert('info', `🏟️ Match configured: ${matchState.homeTeam} vs ${matchState.awayTeam} (${(sport||'football').toUpperCase()})`, 'system');
+  
+  io.to(`stadium_${sid}`).emit('match_update', matchState);
+  addAlert('info', `🏟️ [${matchState.stadiumName}] configured: ${matchState.homeTeam} vs ${matchState.awayTeam}`, 'system');
   res.json({ success: true, data: matchState });
 });
 
@@ -570,6 +783,9 @@ app.post('/api/entry/book', (req, res) => {
   
   slot.booked += count;
   if (slot.booked >= slot.capacity) slot.status = 'full';
+  
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid] || stadiumVenues['hyderabad_stadium'];
   
   const ticket = {
     id: uuidv4(),
@@ -600,7 +816,9 @@ app.get('/api/food/menu', (req, res) => {
 });
 
 app.get('/api/food/concessions', (req, res) => {
-  res.json({ success: true, data: VENUE.concessions });
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid];
+  res.json({ success: true, data: VENUE?.concessions || [] });
 });
 
 app.post('/api/food/order', (req, res) => {
@@ -674,20 +892,31 @@ app.post('/api/food/orders/:id/complete', (req, res) => {
 
 // --- Routing ---
 app.get('/api/routing/optimal', (req, res) => {
-  const { from, to } = req.query;
-  // Simple routing simulation
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid];
+  if (!VENUE) return res.status(404).json({ success: false });
+
+  const { to, gate } = req.query;
+  const gates = VENUE.gates;
+  const bestGate = [...gates].sort((a,b) => a.queue_length - b.queue_length)[0];
+
   const routes = [
-    { path: ['Main Concourse', 'North Corridor', 'Section A'], distance: '120m', time: '3 min', congestion: 'low' },
-    { path: ['East Passage', 'Upper Deck', 'Section A'], distance: '180m', time: '5 min', congestion: 'medium' },
-    { path: ['South Link', 'Ground Level', 'Section A'], distance: '200m', time: '6 min', congestion: 'high' }
+    { path: [`Gate ${gate || bestGate.id}`, 'Main Concourse', 'Upper Deck', to || 'Seat Section'], distance: '150m', time: '4 min', congestion: 'low' },
+    { path: [`Gate ${gate || bestGate.id}`, 'Side Tunnel', 'Lower Level', to || 'Seat Section'], distance: '180m', time: '6 min', congestion: 'medium' }
   ];
-  const recommended = routes[0];
-  res.json({ success: true, data: { recommended, alternatives: routes.slice(1) } });
+  
+  res.json({ success: true, data: { 
+    recommended: routes[0], 
+    alternatives: routes.slice(1),
+    lowCongestionGates: gates.filter(g => g.queue_length < 30).map(g => g.id)
+  }});
 });
 
 // --- Alerts ---
 app.get('/api/alerts', (req, res) => {
-  res.json({ success: true, data: alerts });
+  const sid = req.query.stadiumId;
+  const filtered = sid ? alerts.filter(a => a.stadiumId === sid || !a.stadiumId) : alerts;
+  res.json({ success: true, data: filtered });
 });
 
 app.post('/api/alerts/:id/acknowledge', (req, res) => {
@@ -705,7 +934,9 @@ app.post('/api/alerts/create', (req, res) => {
 
 // --- Staff ---
 app.get('/api/staff', (req, res) => {
-  res.json({ success: true, data: staff });
+  const sid = req.query.stadiumId;
+  const filtered = sid ? staff.filter(s => s.stadiumId === sid || !s.stadiumId) : staff;
+  res.json({ success: true, data: filtered });
 });
 
 app.post('/api/staff/add', (req, res) => {
@@ -760,6 +991,11 @@ app.post('/api/staff/:id/release', (req, res) => {
 
 // --- Analytics ---
 app.get('/api/analytics', (req, res) => {
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid];
+  const matchState = stadiumStates[sid];
+  if (!VENUE || !matchState) return res.status(404).json({ success: false });
+
   const avgQueueTime = VENUE.concessions.reduce((s, c) => s + c.queue_time, 0) / VENUE.concessions.length;
   res.json({
     success: true,
@@ -768,9 +1004,9 @@ app.get('/api/analytics', (req, res) => {
       currentAttendance: matchState.attendance,
       utilization: ((matchState.attendance / VENUE.capacity) * 100).toFixed(1),
       avgQueueTime: avgQueueTime.toFixed(1),
-      activeAlerts: alerts.filter(a => !a.acknowledged).length,
-      staffDeployed: staff.filter(s => s.status === 'dispatched').length,
-      staffAvailable: staff.filter(s => s.status === 'available').length
+      activeAlerts: alerts.filter(a => (a.stadiumId === sid || !a.stadiumId) && !a.acknowledged).length,
+      staffDeployed: staff.filter(s => s.status === 'dispatched' && (s.stadiumId === sid || !s.stadiumId)).length,
+      staffAvailable: staff.filter(s => s.status === 'available' && (s.stadiumId === sid || !s.stadiumId)).length
     }
   });
 });
@@ -781,6 +1017,10 @@ app.get('/api/analytics/crowd-history', (req, res) => {
 
 // --- Dynamic Signage ---
 app.get('/api/signage', (req, res) => {
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid];
+  if (!VENUE) return res.status(404).json({ success: false });
+
   const signs = VENUE.gates.map(gate => {
     const zone = VENUE.zones.find(z => z.id === gate.zone);
     const congestion = gate.queue_length > 100 ? 'high' : gate.queue_length > 30 ? 'medium' : 'low';
@@ -893,8 +1133,10 @@ app.post('/api/payment/verify', (req, res) => {
   }
 
   // Payment confirmed — create the real order
-  const concession = VENUE.concessions.find(c => c.zone === pending.zone && c.status === 'open')
-                  || VENUE.concessions.find(c => c.status === 'open');
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid];
+  const concession = VENUE?.concessions.find(c => c.zone === pending.zone && c.status === 'open')
+                  || VENUE?.concessions.find(c => c.status === 'open');
   if (!concession) return res.status(400).json({ success: false, error: 'No concession available' });
 
   const order = {
@@ -966,7 +1208,10 @@ app.delete('/api/food/menu/:id', (req, res) => {
 // ─── QR ORDER SCANNER VERIFICATION ───────────────────────────────────
 // Staff scans the attendee's pickup QR; marks it as delivered
 app.post('/api/orders/scan-pickup', (req, res) => {
-  const { qrCode } = req.body;
+  const { qrCode, stadiumId } = req.body;
+  const sid = stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid];
+  
   if (!qrCode) return res.status(400).json({ success: false, error: 'qrCode required' });
   const order = orders.find(o => o.qrCode === qrCode || o.id === qrCode);
   if (!order) return res.status(404).json({ success: false, error: 'Order not found — invalid QR' });
@@ -975,15 +1220,19 @@ app.post('/api/orders/scan-pickup', (req, res) => {
 
   order.status = 'delivered';
   syncOrder(order);
-  const concession = VENUE.concessions.find(c => c.id === order.concessionId);
-  if (concession) concession.orders_pending = Math.max(0, concession.orders_pending - 1);
-  io.emit('order_update', order);
+  if (VENUE) {
+    const concession = VENUE.concessions.find(c => c.id === order.concessionId);
+    if (concession) concession.orders_pending = Math.max(0, concession.orders_pending - 1);
+  }
+  io.to(`stadium_${sid}`).emit('order_update', order);
   res.json({ success: true, data: order, message: 'Order confirmed and delivered!' });
 });
 
 // ─── IMPROVED ROUTING ────────────────────────────────────────────────
 app.get('/api/routing/optimal', (req, res) => {
-  const { from, to, gate } = req.query;
+  const { from, to, gate, stadiumId } = req.query;
+  const sid = stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid] || stadiumVenues['hyderabad_stadium'];
 
   // Compute congestion-aware routes from the gate
   const gateObj = VENUE.gates.find(g => g.id === gate) || VENUE.gates[0];
@@ -1038,26 +1287,26 @@ app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 
 // ============================================================
 
 io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
-
-  // Send initial state
-  socket.emit('venue_update', getVenueState());
-  socket.emit('match_update', matchState);
-  socket.emit('alerts_init', alerts);
-
-  socket.on('admin_score_update', (data) => {
-    if (data.homeScore !== undefined) matchState.homeScore = parseInt(data.homeScore);
-    if (data.awayScore !== undefined) matchState.awayScore = parseInt(data.awayScore);
-    io.emit('match_update', matchState);
-    console.log(`Score updated via socket: ${matchState.homeScore} - ${matchState.awayScore}`);
+  socket.on('join_stadium', (sid) => {
+    socket.join(`stadium_${sid}`);
+    console.log(`Client ${socket.id} joined room: stadium_${sid}`);
+    
+    // Send current state for this specific stadium
+    socket.emit('venue_update', stadiumVenues[sid] || stadiumVenues['hyderabad_stadium']);
+    socket.emit('match_update', stadiumStates[sid] || stadiumStates['hyderabad_stadium']);
+    socket.emit('alerts_init', alerts.filter(a => a.stadiumId === sid || !a.stadiumId));
   });
 
-  socket.on('request_route', (data) => {
-    const routes = [
-      { path: 'North Corridor → Section ' + (data.section || 'A'), time: '3 min', congestion: 'low' },
-      { path: 'East Bypass → Section ' + (data.section || 'A'), time: '5 min', congestion: 'medium' }
-    ];
-    socket.emit('route_response', { routes, recommended: routes[0] });
+  socket.on('admin_score_update', (data) => {
+    const sid = data.stadiumId || 'hyderabad_stadium';
+    const matchState = stadiumStates[sid];
+    if (!matchState) return;
+    
+    if (data.homeScore !== undefined) matchState.homeScore = parseInt(data.homeScore);
+    if (data.awayScore !== undefined) matchState.awayScore = parseInt(data.awayScore);
+    
+    io.to(`stadium_${sid}`).emit('match_update', matchState);
+    console.log(`[${sid}] Score updated via socket: ${matchState.homeScore} - ${matchState.awayScore}`);
   });
 
   socket.on('disconnect', () => {
@@ -1070,10 +1319,11 @@ io.on('connection', (socket) => {
 // ============================================================
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`\n🏟️  VenueAI Server running at http://localhost:${PORT}`);
-  console.log(`📊 Dashboard: http://localhost:${PORT}/dashboard`);
-  console.log(`📱 Attendee App: http://localhost:${PORT}`);
-  console.log(`🔌 API Base: http://localhost:${PORT}/api\n`);
-  startSimulation();
-});
+if (process.env.NODE_ENV !== 'production') {
+  server.listen(PORT, () => {
+    console.log(`\n🏟️  VenueAI Multi-Stadium Server running at http://localhost:${PORT}`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;

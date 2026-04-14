@@ -13,17 +13,71 @@ let fullMenu    = [];
 let venueState  = null;
 let isCartOpen  = false;
 
+let currentStadiumId = localStorage.getItem('venue_stadium_id');
+let activeStadiums   = [];
+
 // ── Boot ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  if (currentStadiumId) {
+    enterStadium(currentStadiumId);
+  } else {
+    loadStadiums();
+  }
+  
   fetchMenu();
   fetchSlots();
-  fetchMatch(); // Initialize with current match state
   restoreBooking();
   restoreOrders();
   setInterval(tickETAs, 1000);
   setInterval(animateBboxes, 1800);
   fetchWeather();
 });
+
+async function loadStadiums() {
+  try {
+    const res = await fetch('/api/stadiums');
+    const data = await res.json();
+    if (data.success) {
+      activeStadiums = data.data;
+      renderStadiumList();
+    }
+  } catch (e) {
+    console.error("Failed to load stadiums knowledge base.");
+  }
+}
+
+function renderStadiumList() {
+  const grid = document.getElementById('stadiumGrid');
+  if (!grid) return;
+  grid.innerHTML = activeStadiums.map(s => `
+    <div class="stadium-card" onclick="enterStadium('${s.id}')">
+      <h4>${s.name}</h4>
+      <p>${s.city}, ${s.country}</p>
+      <div style="font-size:0.6rem; margin-top:5px; color:var(--amber)">${s.sport.toUpperCase()}</div>
+    </div>
+  `).join('');
+}
+
+function selectStadiumById() {
+  const sid = document.getElementById('customStadiumId').value.trim();
+  if (sid) enterStadium(sid);
+}
+
+function enterStadium(sid) {
+  currentStadiumId = sid;
+  localStorage.setItem('venue_stadium_id', sid);
+  
+  // Join Room
+  socket.emit('join_stadium', sid);
+  
+  // UI Transition
+  const overlay = document.getElementById('stadiumOverlay');
+  if (overlay) overlay.style.display = 'none';
+  const hero = document.getElementById('mainHero');
+  if (hero) hero.style.display = 'block';
+  
+  fetchMatch();
+}
 
 // ── Restore from localStorage ─────────────────────────────────
 function restoreBooking() {
@@ -61,13 +115,10 @@ socket.on('venue_update', data => {
 // ─── Fetch Match State ────────────────────────────────────────
 async function fetchMatch() {
   try {
-    const res = await fetch('/api/match');
-    const d = await res.json();
-    if (d.success) {
-      // Trigger update logic manually for initial state
-      updateMatchUI(d.data);
-    }
-  } catch (e) { console.error("Match fetch error", e); }
+    const res = await fetch(`/api/match?stadiumId=${currentStadiumId || 'hyderabad_stadium'}`);
+    const data = await res.json();
+    if (data.success) updateMatchUI(data.data);
+  } catch (e) { console.error('Match fetch failed'); }
 }
 
 // ─── Socket: Match Update ──────────────────────────────────────────────
@@ -88,20 +139,40 @@ const STADIUM_MAP = {
   hyderabad_stadium: 'Rajiv Gandhi Intl Stadium',
 };
 
+function showStadiumSelector() {
+  const overlay = document.getElementById('stadiumOverlay');
+  if (overlay) overlay.style.display = 'flex';
+  loadStadiums();
+}
+
 function updateMatchUI(data) {
-  // Cricket Formatting: Score/Wickets
-  const hText = data.sport === 'cricket' ? `${data.homeScore}/${data.homeWickets}` : data.homeScore;
-  const aText = data.sport === 'cricket' ? `${data.awayScore}/${data.awayWickets}` : data.awayScore;
+  // Score Update
+  setText('homeScore', data.homeScore);
+  setText('awayScore', data.awayScore);
   
-  setText('homeScore', hText);
-  setText('awayScore', aText);
+  // Wickets Update (Special for Cricket)
+  const homeW = document.getElementById('homeWickets');
+  const homeWrap = document.getElementById('homeWicketsWrap');
+  const awayW = document.getElementById('awayWickets');
+  const awayWrap = document.getElementById('awayWicketsWrap');
+
+  if (data.sport === 'cricket') {
+    if (homeW) homeW.innerText = data.homeWickets || 0;
+    if (awayW) awayW.innerText = data.awayWickets || 0;
+    if (homeWrap) homeWrap.style.display = 'inline';
+    if (awayWrap) awayWrap.style.display = 'inline';
+  } else {
+    if (homeWrap) homeWrap.style.display = 'none';
+    if (awayWrap) awayWrap.style.display = 'none';
+  }
+
   setText('matchStatus', data.status.replace(/_/g,' ').toUpperCase());
   setText('matchMinute', data.minute > 0 ? data.minute + "'" : '');
 
   // Target Update
   const targetEl = document.getElementById('targetScore');
   if (targetEl) {
-    if (data.target > 0 && data.status === 'second_half') {
+    if (data.target > 0) {
       targetEl.innerText = `Target: ${data.target}`;
       targetEl.style.display = 'block';
     } else {
@@ -135,12 +206,15 @@ function updateMatchUI(data) {
     `📡 Reality Sync: Active (${data.sport?.toUpperCase()} API)`,
     `🤖 AI Agent: Analyzing ${data.homeTeam} performance...`,
     `🌍 Cloud Sync: Connected to Global Sports Feed`,
-    `⚖️ AI Prediction: High momentum for ${data.homeScore >= data.awayScore ? data.homeTeam : data.awayTeam}`
+    `🌡️ Weather: ${data.weather?.temp}°C | Humidity: ${data.weather?.humidity}%`
   ];
-  if (Math.random() > 0.7) {
-    const msg = syncMsgs[Math.floor(Math.random() * syncMsgs.length)];
-    const statusEl = document.getElementById('aiSyncText');
-    if (statusEl) statusEl.innerText = msg;
+  const msg = syncMsgs[Math.floor(Math.random() * syncMsgs.length)];
+  const statusEl = document.getElementById('aiSyncText');
+  if (statusEl) statusEl.innerText = msg;
+
+  if (data.weather) {
+    const weatherEl = document.getElementById('heroWeather');
+    if (weatherEl) weatherEl.innerText = `${data.weather.temp}°C | ${data.weather.condition}`;
   }
 
   // Force Update Stadium Name (PRIORITIZE data.stadiumName or Mapping)
@@ -192,6 +266,33 @@ function switchTab(id) {
   if (btn)   btn.classList.add('active');
   currentTab = id;
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── UI Updates ────────────────────────────────────────────────
+function updateVenueUI(data) {
+  if (data.infrastructure) {
+    renderZoneCards(data.infrastructure);
+    renderGateStatus(data.infrastructure.gates);
+    renderCCTVs(data.infrastructure.cctv);
+  }
+}
+
+function renderCCTVs(cctvs) {
+  const grid = document.getElementById('cctvGrid');
+  if (!grid || !cctvs) return;
+  grid.innerHTML = cctvs.map(cam => `
+    <div class="ai-cctv-card">
+      <div class="ai-cctv-video">
+        <img src="${cam.feed}" style="width:100%;height:100%;object-fit:cover;opacity:0.8">
+        <div class="ai-bbox" style="top:${20 + Math.random()*40}%;left:${10 + Math.random()*60}%"></div>
+        <div class="ai-overlay-badge"><span style="color:#10b981">●</span> ${cam.status.toUpperCase()} | AI SECURE</div>
+      </div>
+      <div class="ai-cctv-footer">
+        <span>${cam.name}</span>
+        <span class="queue-badge ${Math.random() > 0.5 ? 'short' : 'medium'}">● Active</span>
+      </div>
+    </div>
+  `).join('');
 }
 
 // ── Zone cards ────────────────────────────────────────────────

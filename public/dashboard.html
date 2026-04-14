@@ -10,6 +10,25 @@
 <body>
 <div id="dashboard">
 
+ <div id="dashboardLogin" class="stadium-overlay">
+    <div class="overlay-content">
+      <div class="logo">VenueAI <span class="gradient-text">Command</span></div>
+      <h2>Authorized Personnel Only</h2>
+      <p>Which stadium are you handling today?</p>
+      
+      <div class="form-group" style="margin: 20px 0;">
+         <select id="loginStadiumSelect" style="padding:15px; width:100%; border-radius:12px; background:rgba(0,0,0,0.5); color:#fff; border:1px solid var(--walnut-tan); font-size:1.1rem;">
+           <option value="">-- Select Stadium --</option>
+           <!-- Populated via JS -->
+         </select>
+      </div>
+
+      <div class="custom-entry" style="justify-content:center;">
+        <button onclick="loginToStadium()" style="width:100%; font-size:1.2rem; padding:15px;">Access Command Center</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ SIDEBAR ═══ -->
   <aside class="sidebar">
     <div class="sidebar-brand">
