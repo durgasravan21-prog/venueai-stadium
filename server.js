@@ -217,11 +217,6 @@ function applyRealitySync() {
   });
 }
 
-// Check schedule every hour
-setInterval(refreshDailySchedule, 3600000);
-refreshDailySchedule();
-applyRealitySync();
-
 // REAL-WORLD SYNC DATA (Snapshot of today's live feed)
 const GOOGLE_REALITY_FEED = {
   'hyderabad_stadium': {
@@ -243,6 +238,11 @@ const GOOGLE_REALITY_FEED = {
     result: 'Starting soon at 7:30 PM'
   }
 };
+
+// Check schedule every hour
+setInterval(refreshDailySchedule, 3600000);
+refreshDailySchedule();
+applyRealitySync();
 
 // --- Firebase Persistence ---
 async function saveStadiumData() {
