@@ -81,8 +81,13 @@ function enterStadium(sid) {
   if (overlay) overlay.style.display = 'none';
   const hero = document.getElementById('mainHero');
   if (hero) hero.style.display = 'block';
+
+  // REST Fallback for immediate data
+  fetch(`/api/match?stadiumId=${sid}`)
+    .then(r => r.json())
+    .then(d => { if(d.success) updateMatchUI(d.data); });
   
-  fetchMatch();
+  fetchWeather();
 }
 
 // ── Restore from localStorage ─────────────────────────────────

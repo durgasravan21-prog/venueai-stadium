@@ -642,6 +642,13 @@ app.get('/api/venue', (req, res) => {
     data: getStadiumStats(sid)
   });
 });
+app.get('/api/match', (req, res) => {
+  const sid = req.query.stadiumId || 'hyderabad_stadium';
+  res.json({
+    success: true,
+    data: stadiumStates[sid] || stadiumStates['hyderabad_stadium']
+  });
+});
 
 app.post('/api/stadium/:id/venue', (req, res) => {
   const sid = req.params.id;
