@@ -37,6 +37,7 @@ async function loadStadiums() {
   try {
     const res = await fetch('/api/stadiums');
     const data = await res.json();
+    console.log("🏟️ Stadiums Loaded:", data.data?.length);
     if (data.success) {
       activeStadiums = data.data;
       renderStadiumList();
