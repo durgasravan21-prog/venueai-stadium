@@ -250,34 +250,35 @@ const GOOGLE_REALITY_FEED = {
   },
   'eden_gardens': {
     homeTeam: 'KKR (Knights)',
-    awayTeam: 'LSG (Giants)',
+    awayTeam: 'CSK (Super Kings)',
     stadiumName: 'Eden Gardens',
-    homeScore: 162, homeWickets: 2,
-    awayScore: 161, awayWickets: 7,
-    target: 162, status: 'post_match',
-    toss: 'KKR won toss & elected to bowl',
-    result: 'KKR won by 8 wickets'
+    homeScore: 137, homeWickets: 9,
+    awayScore: 141, awayWickets: 3,
+    target: 138, status: 'post_match',
+    toss: 'CSK won toss & elected to field',
+    result: 'CSK won by 7 wickets'
   },
   'chinnaswamy': {
     homeTeam: 'RCB (Challengers)',
     awayTeam: 'MI (Indians)',
     stadiumName: 'M. Chinnaswamy Stadium',
-    homeScore: 112, homeWickets: 3,
-    awayScore: 0, awayWickets: 0,
-    target: 0, status: 'first_half',
-    minute: 12, // 12th over
+    homeScore: 182, homeWickets: 6,
+    awayScore: 185, awayWickets: 3,
+    target: 183, status: 'second_half',
+    minute: 19, // 19th over
     toss: 'MI won toss & elected to field',
-    result: 'RCB batting'
+    result: 'MI needing 5 runs from 6 balls'
   },
   'chepauk': {
     homeTeam: 'CSK (Super Kings)',
-    awayTeam: 'GT (Titans)',
+    awayTeam: 'KKR (Knights)',
     stadiumName: 'M. A. Chidambaram Stadium',
-    homeScore: 206, homeWickets: 6,
-    awayScore: 143, awayWickets: 8,
-    target: 207, status: 'post_match',
-    toss: 'GT won toss & elected to bowl',
-    result: 'CSK won by 63 runs'
+    homeScore: 141, homeWickets: 3,
+    awayScore: 137, awayWickets: 9,
+    target: 138, status: 'second_half',
+    minute: 18, // 18th over
+    toss: 'CSK won toss & elected to bowl',
+    result: 'CSK cruising towards victory'
   }
 };
 
