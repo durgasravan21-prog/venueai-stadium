@@ -603,6 +603,10 @@ function getStadiumStats(sid) {
 // REST API ROUTES
 // ============================================================
 
+app.get('/api/stadiums', (req, res) => {
+  res.json({ success: true, data: STADIUMS_KNOWLEDGE_BASE });
+});
+
 // --- Venue State ---
 app.get('/api/venue', (req, res) => {
   const sid = req.query.stadiumId || 'hyderabad_stadium';
