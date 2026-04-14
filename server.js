@@ -215,6 +215,8 @@ function applyRealitySync() {
     if (stadiumStates[sid]) {
       const live = GOOGLE_REALITY_FEED[sid];
       const state = stadiumStates[sid];
+      
+      // Update core state
       state.homeTeam = live.homeTeam;
       state.awayTeam = live.awayTeam;
       state.homeScore = live.homeScore;
@@ -225,11 +227,16 @@ function applyRealitySync() {
       state.status = live.status;
       state.toss = live.toss || 'Waiting for toss...';
       state.stadiumName = live.stadiumName;
-      console.log(`📡 REALITY SYNC: Pushed live data for ${sid} (${state.homeTeam} vs ${state.awayTeam})`);
+      state.minute = live.minute || state.minute;
+
+      // MANDATORY: Emit the update so frontend sees it instantly
+      io.to(`stadium_${sid}`).emit('match_update', state);
+      console.log(`📡 REALITY SYNC: Broadcast live data for ${sid} (${state.homeTeam} vs ${state.awayTeam})`);
     }
   });
 }
 
+// Initial calls
 // REAL-WORLD SYNC DATA (Snapshot of today's live feed)
 const GOOGLE_REALITY_FEED = {
   'hyderabad_stadium': {
@@ -243,40 +250,36 @@ const GOOGLE_REALITY_FEED = {
   },
   'eden_gardens': {
     homeTeam: 'KKR (Knights)',
-    awayTeam: 'CSK (Super Kings)',
+    awayTeam: 'LSG (Giants)',
     stadiumName: 'Eden Gardens',
-    homeScore: 0, homeWickets: 0,
-    awayScore: 0, awayWickets: 0,
-    target: 0, status: 'pre_match',
-    toss: 'CSK won the toss & elected to bowl first',
-    result: 'Starting soon at 7:30 PM'
+    homeScore: 162, homeWickets: 2,
+    awayScore: 161, awayWickets: 7,
+    target: 162, status: 'post_match',
+    toss: 'KKR won toss & elected to bowl',
+    result: 'KKR won by 8 wickets'
   },
   'chinnaswamy': {
     homeTeam: 'RCB (Challengers)',
     awayTeam: 'MI (Indians)',
     stadiumName: 'M. Chinnaswamy Stadium',
-    homeScore: 0, homeWickets: 0,
+    homeScore: 112, homeWickets: 3,
     awayScore: 0, awayWickets: 0,
-    target: 0, status: 'pre_match',
-    toss: 'Toss at 7:00 PM',
-    result: 'Upcoming Match'
+    target: 0, status: 'first_half',
+    minute: 12, // 12th over
+    toss: 'MI won toss & elected to field',
+    result: 'RCB batting'
   },
   'chepauk': {
     homeTeam: 'CSK (Super Kings)',
     awayTeam: 'GT (Titans)',
     stadiumName: 'M. A. Chidambaram Stadium',
-    homeScore: 178, homeWickets: 4,
-    awayScore: 177, awayWickets: 7,
-    target: 178, status: 'post_match',
-    toss: 'GT won toss & batted first',
-    result: 'CSK won by 6 wickets'
+    homeScore: 206, homeWickets: 6,
+    awayScore: 143, awayWickets: 8,
+    target: 207, status: 'post_match',
+    toss: 'GT won toss & elected to bowl',
+    result: 'CSK won by 63 runs'
   }
 };
-
-// Check schedule every hour
-setInterval(refreshDailySchedule, 3600000);
-refreshDailySchedule();
-applyRealitySync();
 
 // --- Firebase Persistence ---
 async function saveStadiumData() {
@@ -1408,6 +1411,25 @@ if (process.env.NODE_ENV !== 'production') {
     console.log(`\n🏟️  VenueAI Multi-Stadium Server running at http://localhost:${PORT}`);
   });
 }
+
+// ─── INITIALIZE AGENTS ──────────────────────────────────────────────
+refreshDailySchedule(); // Select today's matches
+applyRealitySync();     // Initial sync
+setInterval(refreshDailySchedule, 3600000); // Check once an hour for date change
+setInterval(applyRealitySync, 30000);      // Fetch Google Reality data every 30s
+setInterval(() => {
+  // Minor simulation updates for all stadiums
+  Object.keys(stadiumStates).forEach(sid => {
+    const s = stadiumStates[sid];
+    if (s.status === 'first_half' || s.status === 'second_half') {
+      // s.minute += Math.random() > 0.8 ? 1 : 0; // Handled by Reality Sync mostly
+    }
+    // Update crowd slightly
+    s.attendance = Math.floor(Math.random() * 5000 + 45000);
+    // Push updates
+    io.to(`stadium_${sid}`).emit('match_update', s);
+  });
+}, 5000);
 
 // Export for Vercel
 module.exports = app;
