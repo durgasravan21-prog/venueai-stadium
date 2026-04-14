@@ -427,31 +427,52 @@ function switchPanel(panelId) {
   if (panelId === 'staff') fetchStaff();
   if (panelId === 'orders') fetchOrders();
   if (panelId === 'menu') fetchMenuItems();
+  if (panelId === 'cameras') startWebcam();
 }
 
 // ─── WEBCAM CCTV ───────────────────────────────────────────────────────
 async function startWebcam() {
   const video = document.getElementById('webcamFeed');
   const placeholder = document.getElementById('webcamPlaceholder');
+  if (video.srcObject) return; // avoid re-starting
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     video.srcObject = stream;
     video.style.display = 'block';
     if (placeholder) placeholder.style.display = 'none';
     // Simulated AI density readings
-    setInterval(() => {
-      const count = Math.floor(Math.random() * 80 + 20);
-      setText('webcamAI', `AI: ${count}p · ${count > 60 ? 'HIGH' : count > 35 ? 'MED' : 'LOW'}`);
-      const badge = document.getElementById('webcamDensity');
-      if (badge) {
-        badge.className = `cctv-crowd-badge ${count > 60 ? 'high' : count > 35 ? 'medium' : 'low'}`;
-        badge.innerText = count > 60 ? '🔴 High' : count > 35 ? '🟡 Medium' : '🟢 Low';
-      }
-    }, 2000);
+    if (!window.webcamInterval) {
+      window.webcamInterval = setInterval(() => {
+        const count = Math.floor(Math.random() * 80 + 20);
+        setText('webcamAI', `AI: ${count}p · ${count > 60 ? 'HIGH' : count > 35 ? 'MED' : 'LOW'}`);
+        const badge = document.getElementById('webcamDensity');
+        if (badge) {
+          badge.className = `cctv-crowd-badge ${count > 60 ? 'high' : count > 35 ? 'medium' : 'low'}`;
+          badge.innerText = count > 60 ? '🔴 High' : count > 35 ? '🟡 Medium' : '🟢 Low';
+        }
+      }, 2000);
+    }
   } catch (e) {
     if (placeholder) placeholder.innerHTML = '<span style="font-size:2rem">🚫</span><span style="color:#f87171;font-size:0.85rem;">Camera access denied</span>';
     showToast('Camera access denied. Check browser permissions.');
   }
+}
+
+function openCctvModal(title, source) {
+  const modal = document.getElementById('cctvModal');
+  const modalTitle = document.getElementById('cctvModalTitle');
+  const modalVideo = document.getElementById('cctvModalVideo');
+  if (!modal || !modalVideo) return;
+  modalTitle.innerText = `CCTV FEED: ${title}`;
+  modalVideo.src = source;
+  modal.style.display = 'flex';
+}
+
+function closeCctvModal() {
+  const modal = document.getElementById('cctvModal');
+  const modalVideo = document.getElementById('cctvModalVideo');
+  if (modal) modal.style.display = 'none';
+  if (modalVideo) modalVideo.src = "";
 }
 
 // ─── Socket: Venue Update ──────────────────────────────────────────────
@@ -516,7 +537,10 @@ socket.on('match_update', data => {
     syncBtn.style.background = data.worldSyncMode ? '#666' : '#db4437';
   }
   if (syncInd) {
-    syncInd.innerText = data.worldSyncMode ? 'Syncing: SRH vs RR (Google AI)' : 'Agent Idle';
+    const syncText = data.worldSyncMode 
+      ? `Syncing: ${data.homeTeam} vs ${data.awayTeam} @ ${data.stadiumName} (Google AI)`
+      : 'Agent Idle';
+    syncInd.innerText = syncText;
     syncInd.style.color = data.worldSyncMode ? '#4285f4' : 'var(--text-muted)';
   }
 

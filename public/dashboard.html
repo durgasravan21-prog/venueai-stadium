@@ -366,8 +366,11 @@
                   <div class="cctv-ai-badge">AI: 115p/f · 12m queue</div>
                 </div>
                 <div class="cctv-label">
-                  <span class="cctv-name">📌 North Concourse</span>
-                  <span class="cctv-crowd-badge medium">Medium</span>
+                  <div style="flex:1">
+                    <span class="cctv-name">📌 North Concourse</span>
+                    <span class="cctv-crowd-badge medium">Medium</span>
+                  </div>
+                  <button class="btn btn-sm btn-primary" onclick="openCctvModal('North Concourse', 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4')">🔍 VIEW</button>
                 </div>
               </div>
 
@@ -382,8 +385,11 @@
                   <div class="cctv-ai-badge">AI: 28p/f · 4m queue</div>
                 </div>
                 <div class="cctv-label">
-                  <span class="cctv-name">📌 South Stand</span>
-                  <span class="cctv-crowd-badge low">Low</span>
+                  <div style="flex:1">
+                    <span class="cctv-name">📌 South Stand</span>
+                    <span class="cctv-crowd-badge low">Low</span>
+                  </div>
+                  <button class="btn btn-sm btn-primary" onclick="openCctvModal('South Stand', 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4')">🔍 VIEW</button>
                 </div>
               </div>
 
@@ -398,8 +404,11 @@
                   <div class="cctv-ai-badge">⚠️ 243p/f · HIGH</div>
                 </div>
                 <div class="cctv-label">
-                  <span class="cctv-name">📌 East Concessions</span>
-                  <span class="cctv-crowd-badge high">🔴 High</span>
+                  <div style="flex:1">
+                    <span class="cctv-name">📌 East Concessions</span>
+                    <span class="cctv-crowd-badge high">🔴 High</span>
+                  </div>
+                  <button class="btn btn-sm btn-primary" onclick="openCctvModal('East Concessions', 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4')">🔍 VIEW</button>
                 </div>
               </div>
             </div>
@@ -776,8 +785,26 @@
   </div><!-- main-area -->
 </div><!-- dashboard -->
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="/js/dashboard.js?v=2.1"></script>
+
+  <!-- CCTV Full View Modal -->
+  <div id="cctvModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9000;padding:40px;flex-direction:column;align-items:center;justify-content:center;">
+    <div style="width:100%;max-width:1000px;background:var(--walnut-deep);border:1px solid var(--walnut-tan);border-radius:24px;overflow:hidden;box-shadow:0 0 100px rgba(0,0,0,0.8);">
+      <div style="padding:20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);">
+        <h3 id="cctvModalTitle" style="margin:0;color:var(--amber);">CCTV FEED</h3>
+        <button onclick="closeCctvModal()" style="background:none;border:none;color:#fff;font-size:2rem;cursor:pointer;">&times;</button>
+      </div>
+      <div style="position:relative;background:#000;aspect-ratio:16/9;">
+        <video id="cctvModalVideo" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:contain;"></video>
+        <div style="position:absolute;top:20px;left:20px;background:rgba(220,38,38,0.8);padding:5px 15px;border-radius:20px;color:#fff;font-size:0.8rem;font-weight:900;">LIVE FEED</div>
+      </div>
+      <div style="padding:24px;background:rgba(0,0,0,0.3);color:var(--text-secondary);font-size:0.9rem;">
+        <p id="cctvModalDesc">AI detecting crowd density and potential bottlenecks in this area. Analytics synchronized with command center.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/js/dashboard.js?v=2.2"></script>
 </body>
 </html>
