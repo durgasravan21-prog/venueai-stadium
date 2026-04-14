@@ -81,7 +81,12 @@ body {
   pointer-events: none;
 }
 
-.hero-content { position: relative; z-index: 2; padding: 2rem 1.5rem; width: 100%; max-width: 600px; }
+.hero-content { 
+  position: relative; z-index: 2; padding: 2rem 1.5rem; 
+  width: 100%; max-width: 600px; 
+  margin: 0 auto; 
+  display: flex; flex-direction: column; align-items: center;
+}
 
 .hero-badge {
   display: inline-block; padding: 5px 16px;
@@ -116,7 +121,7 @@ body {
   cursor: pointer;
   transition: var(--transition);
   backdrop-filter: blur(4px);
-  margin-left: 10px;
+  margin-top: 10px;
 }
 .switch-venue-btn:hover {
   background: var(--amber);
