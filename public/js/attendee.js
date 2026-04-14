@@ -16,6 +16,27 @@ let isCartOpen  = false;
 let currentStadiumId = localStorage.getItem('venue_stadium_id');
 let activeStadiums   = [];
 
+// --- LIVE REALITY SYNC POLLING (Fail-safe for Vercel/Sockets) ---
+setInterval(async () => {
+  if (!currentStadiumId) return;
+  try {
+    const res = await fetch(`/api/stadium/${currentStadiumId}`);
+    const result = await res.json();
+    if (result.success && result.data.state) {
+      updateMatchUI(result.data.state);
+      // Also update venue if needed
+      currentVenueData = result.data.venue;
+    }
+  } catch (err) {
+    console.warn("Reality Sync: Polling fallback failed.", err);
+  }
+}, 15000); // 15s Reality Pulse
+
+socket.on('connect', () => {
+  console.log('Connected to VenueAI Reality Sync Engine (Socket)');
+  if (currentStadiumId) socket.emit('join_stadium', currentStadiumId);
+});
+
 // ── Boot ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (currentStadiumId) {

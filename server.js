@@ -248,6 +248,16 @@ const GOOGLE_REALITY_FEED = {
     target: 217, status: 'post_match',
     result: 'SRH won by 57 runs'
   },
+  'hyderabad_stadium': {
+    homeTeam: 'SRH (Sunrisers)',
+    awayTeam: 'RR (Royals)',
+    stadiumName: 'Rajiv Gandhi Intl Stadium',
+    homeScore: 165, homeWickets: 4,
+    awayScore: 168, awayWickets: 2,
+    target: 166, status: 'post_match',
+    toss: 'RR won toss & elected to field',
+    result: 'RR won by 8 wickets'
+  },
   'eden_gardens': {
     homeTeam: 'KKR (Knights)',
     awayTeam: 'CSK (Super Kings)',
@@ -260,14 +270,15 @@ const GOOGLE_REALITY_FEED = {
     result: 'CSK needing 60 from 24 balls'
   },
   'chinnaswamy': {
-    homeTeam: 'RCB (Challengers)',
-    awayTeam: 'MI (Indians)',
+    homeTeam: 'CSK (Super Kings)',
+    awayTeam: 'KKR (Knights)',
     stadiumName: 'M. Chinnaswamy Stadium',
-    homeScore: 182, homeWickets: 6,
-    awayScore: 185, awayWickets: 3,
-    target: 183, status: 'post_match',
-    toss: 'MI won toss & elected to field',
-    result: 'MI won by 7 wickets'
+    homeScore: 171, homeWickets: 2,
+    awayScore: 170, awayWickets: 7,
+    target: 171, status: 'second_half',
+    minute: 19, // 19th over
+    toss: 'CSK won toss & elected to bowl',
+    result: 'CSK needing 2 runs to win'
   },
   'chepauk': {
     homeTeam: 'CSK (Super Kings)',
@@ -1363,6 +1374,15 @@ app.get('/api/routing/optimal', (req, res) => {
   ];
 
   res.json({ success: true, data: { recommended: pathOptions[0], alternatives: pathOptions.slice(1), lowCongestionGates: lowGates } });
+});
+
+app.get('/api/stadium/:id', (req, res) => {
+  const sid = req.params.id;
+  // On-demand Reality Sync trigger for Vercel/Serverless robustness
+  applyRealitySync();
+  const state = stadiumStates[sid] || stadiumStates['hyderabad_stadium'];
+  const venue = stadiumVenues[sid] || stadiumVenues['hyderabad_stadium'];
+  res.json({ success: true, data: { state, venue } });
 });
 
 // Serve pages
