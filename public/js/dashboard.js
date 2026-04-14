@@ -558,10 +558,10 @@ socket.on('match_update', data => {
   setText('ctrlAwayScore', aScore);
   setText('ctrlStatus', data.status.replace(/_/g, ' ').toUpperCase());
   setText('ctrlMinute', data.minute > 0 ? `${data.minute}'` : '—');
-  
-  // FIXED: Update Team Names, Sport, and Stadium from backend broadcast
-  setText('ctrlTeamA', data.homeTeam);
-  setText('ctrlTeamB', data.awayTeam);
+
+  if (data.homeTeam) setText('ctrlTeamA', data.homeTeam);
+  if (data.awayTeam) setText('ctrlTeamB', data.awayTeam);
+  if (data.stadiumName) setText('ctrlStadiumName', data.stadiumName);
   
   // Cricket Bat/Bowl Icons Role Management (SWAP AFTER 1ST INNINGS)
   let iconA = (typeof sportIcons !== 'undefined' && sportIcons[data.sport]) ? sportIcons[data.sport] : '⚽';
