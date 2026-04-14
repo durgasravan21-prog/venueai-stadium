@@ -143,15 +143,16 @@ STADIUMS_KNOWLEDGE_BASE.forEach(s => {
 // --- Daily Match Schedule (AI Control Center) ---
 const DAILY_MATCH_SCHEDULE = {
   // Today's matches (AI will auto-select based on Date)
-  '2024-04-14': [
+  '2026-04-14': [
     { sid: 'hyderabad_stadium', home: 'SRH (Sunrisers)', away: 'RR (Royals)', sport: 'cricket', name: 'Rajiv Gandhi Intl Stadium' },
-    { sid: 'wembley', home: 'Manchester City', away: 'Real Madrid', sport: 'football', name: 'Wembley Stadium' },
-    { sid: 'msg', home: 'NY Knicks', away: 'LA Lakers', sport: 'basketball', name: 'Madison Square Garden' }
+    { sid: 'wembley', home: 'Manchester City', away: 'Arsenal', sport: 'football', name: 'Wembley Stadium' },
+    { sid: 'msg', home: 'NY Knicks', away: 'MIAMI HEAT', sport: 'basketball', name: 'Madison Square Garden' },
+    { sid: 'eden_gardens', home: 'KKR (Knights)', away: 'CSK (Super Kings)', sport: 'cricket', name: 'Eden Gardens' }
   ],
-  '2024-04-15': [
+  '2026-04-15': [
     { sid: 'eden_gardens', home: 'KKR (Knights)', away: 'MI (Indians)', sport: 'cricket', name: 'Eden Gardens' },
     { sid: 'camp_nou', home: 'Barcelona', away: 'PSG', sport: 'football', name: 'Camp Nou' },
-    { sid: 'ig_arena', home: 'India', away: 'Australia', sport: 'hockey', name: 'Major Dhyan Chand Natl Stadium' }
+    { sid: 'ahmedabad_stadium', home: 'GT (Titans)', away: 'SRH (Sunrisers)', sport: 'cricket', name: 'Narendra Modi Stadium' }
   ]
 };
 
@@ -197,24 +198,50 @@ function refreshDailySchedule() {
   });
 }
 
+function applyRealitySync() {
+  Object.keys(GOOGLE_REALITY_FEED).forEach(sid => {
+    if (stadiumStates[sid]) {
+      const live = GOOGLE_REALITY_FEED[sid];
+      const state = stadiumStates[sid];
+      state.homeTeam = live.homeTeam;
+      state.awayTeam = live.awayTeam;
+      state.homeScore = live.homeScore;
+      state.homeWickets = live.homeWickets;
+      state.awayScore = live.awayScore;
+      state.awayWickets = live.awayWickets;
+      state.target = live.target;
+      state.status = live.status;
+      state.stadiumName = live.stadiumName;
+      console.log(`📡 REALITY SYNC: Pushed live data for ${sid} (${state.homeTeam} vs ${state.awayTeam})`);
+    }
+  });
+}
+
 // Check schedule every hour
 setInterval(refreshDailySchedule, 3600000);
 refreshDailySchedule();
+applyRealitySync();
 
-// REAL-WORLD SYNC DATA (Snapshot for SRH vs RR)
+// REAL-WORLD SYNC DATA (Snapshot of today's live feed)
 const GOOGLE_REALITY_FEED = {
-  homeTeam: 'SRH (Sunrisers)',
-  awayTeam: 'RR (Royals)',
-  stadium: 'hyderabad_stadium',
-  stadiumName: 'Rajiv Gandhi Intl Stadium',
-  sport: 'cricket',
-  homeScore: 216,
-  homeWickets: 6,
-  awayScore: 159,
-  awayWickets: 10,
-  target: 217,
-  status: 'post_match',
-  result: 'SRH won by 57 runs'
+  'hyderabad_stadium': {
+    homeTeam: 'SRH (Sunrisers)',
+    awayTeam: 'RR (Royals)',
+    stadiumName: 'Rajiv Gandhi Intl Stadium',
+    homeScore: 216, homeWickets: 6,
+    awayScore: 159, awayWickets: 10,
+    target: 217, status: 'post_match',
+    result: 'SRH won by 57 runs'
+  },
+  'eden_gardens': {
+    homeTeam: 'KKR (Knights)',
+    awayTeam: 'CSK (Super Kings)',
+    stadiumName: 'Eden Gardens',
+    homeScore: 0, homeWickets: 0,
+    awayScore: 0, awayWickets: 0,
+    target: 0, status: 'pre_match',
+    result: 'Starting soon at 7:30 PM'
+  }
 };
 
 // --- Firebase Persistence ---
