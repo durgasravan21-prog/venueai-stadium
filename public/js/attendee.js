@@ -48,19 +48,24 @@ async function loadStadiums() {
 
 function renderStadiumList() {
   const grid = document.getElementById('stadiumGrid');
-  if (!grid) return;
-  grid.innerHTML = activeStadiums.map(s => `
-    <div class="stadium-card" onclick="enterStadium('${s.id}')">
-      <h4>${s.name}</h4>
-      <p>${s.city}, ${s.country}</p>
-      <div style="font-size:0.6rem; margin-top:5px; color:var(--amber)">${s.sport.toUpperCase()}</div>
-    </div>
-  `).join('');
-}
+  const dropdown = document.getElementById('stadiumSelectDropdown');
+  
+  if (grid) {
+    grid.innerHTML = activeStadiums.map(s => `
+      <div class="stadium-card" onclick="enterStadium('${s.id}')">
+        <h4>${s.name}</h4>
+        <p>${s.city}, ${s.country}</p>
+        <div style="font-size:0.6rem; margin-top:5px; color:var(--amber)">${s.sport.toUpperCase()}</div>
+      </div>
+    `).join('');
+  }
 
-function selectStadiumById() {
-  const sid = document.getElementById('customStadiumId').value.trim();
-  if (sid) enterStadium(sid);
+  if (dropdown) {
+    const existingOptions = `<option value="" disabled selected>— Choose your stadium —</option>`;
+    dropdown.innerHTML = existingOptions + activeStadiums.map(s => `
+      <option value="${s.id}">${s.name} (${s.city})</option>
+    `).join('');
+  }
 }
 
 function enterStadium(sid) {

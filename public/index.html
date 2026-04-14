@@ -23,8 +23,11 @@
       </div>
       
       <div class="custom-entry">
-        <input type="text" id="customStadiumId" placeholder="Enter Stadium ID (e.g. eden)">
-        <button onclick="selectStadiumById()">Enter Gate</button>
+        <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6); display: block; margin-bottom: 8px;">Quick Select Stadium</label>
+        <select id="stadiumSelectDropdown" class="stadium-dropdown-select" onchange="enterStadium(this.value)">
+          <option value="" disabled selected>— Choose your stadium —</option>
+          <!-- Populated via JS -->
+        </select>
       </div>
     </div>
   </div>
