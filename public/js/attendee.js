@@ -208,21 +208,14 @@ function updateMatchUI(data) {
 
   // Custom roles for Cricket (Batting vs Bowling swap)
   if (data.sport === 'cricket') {
-    if (data.battingTeam === 'home') {
-      iconA = '🏏'; 
-      iconB = '⚾'; 
-    } else {
-      iconA = '⚾'; 
-      iconB = '🏏'; 
-    }
+    if (data.battingTeam === 'home') { iconA = '🏏'; iconB = '🔴'; }
+    else { iconA = '🔴'; iconB = '🏏'; }
   }
 
-  if (data.homeTeam) setText('heroTeamA', data.homeTeam);
-  if (data.awayTeam) setText('heroTeamB', data.awayTeam);
+  setText('heroTeamA', data.homeTeam);
+  setText('heroTeamB', data.awayTeam);
   setText('heroIconA', iconA);
   setText('heroIconB', iconB);
-
-  // Reality Sync Status (AI Agent connection simulation)
   const syncMsgs = [
     `📡 Reality Sync: Active (${data.sport?.toUpperCase()} API)`,
     `🤖 AI Agent: Analyzing ${data.homeTeam} performance...`,
