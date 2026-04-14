@@ -111,9 +111,17 @@ const STADIUMS_KNOWLEDGE_BASE = [
   // CRICKET
   { id: 'hyderabad_stadium', name: 'Rajiv Gandhi Intl Stadium', city: 'Hyderabad', sport: 'cricket', country: 'India', capacity: 55000 },
   { id: 'eden_gardens', name: 'Eden Gardens', city: 'Kolkata', sport: 'cricket', country: 'India', capacity: 66000 },
+  { id: 'ahmedabad_stadium', name: 'Narendra Modi Stadium', city: 'Ahmedabad', sport: 'cricket', country: 'India', capacity: 132000 },
+  { id: 'chinnaswamy', name: 'M. Chinnaswamy Stadium', city: 'Bengaluru', sport: 'cricket', country: 'India', capacity: 40000 },
+  { id: 'chepauk', name: 'M. A. Chidambaram Stadium', city: 'Chennai', sport: 'cricket', country: 'India', capacity: 50000 },
+  { id: 'wankhede', name: 'Wankhede Stadium', city: 'Mumbai', sport: 'cricket', country: 'India', capacity: 33000 },
+  { id: 'delhi_stadium', name: 'Arun Jaitley Stadium', city: 'Delhi', sport: 'cricket', country: 'India', capacity: 41000 },
+  { id: 'dharamshala_stadium', name: 'HPCA Stadium', city: 'Dharamshala', sport: 'cricket', country: 'India', capacity: 23000 },
+  { id: 'ekana_stadium', name: 'Ekana Stadium', city: 'Lucknow', sport: 'cricket', country: 'India', capacity: 50000 },
+  { id: 'jaipur_stadium', name: 'Sawai Mansingh Stadium', city: 'Jaipur', sport: 'cricket', country: 'India', capacity: 30000 },
+  { id: 'mohali_stadium', name: 'IS Bindra Stadium', city: 'Mohali', sport: 'cricket', country: 'India', capacity: 26000 },
   { id: 'lords', name: 'Lord\'s Cricket Ground', city: 'London', sport: 'cricket', country: 'UK', capacity: 31000 },
   { id: 'mcg', name: 'Melbourne Cricket Ground', city: 'Melbourne', sport: 'cricket', country: 'Australia', capacity: 100000 },
-  { id: 'ahmedabad_stadium', name: 'Narendra Modi Stadium', city: 'Ahmedabad', sport: 'cricket', country: 'India', capacity: 132000 },
   
   // FOOTBALL
   { id: 'salt_lake', name: 'Salt Lake Stadium', city: 'Kolkata', sport: 'football', country: 'India', capacity: 85000 },
@@ -147,12 +155,16 @@ const DAILY_MATCH_SCHEDULE = {
     { sid: 'hyderabad_stadium', home: 'SRH (Sunrisers)', away: 'RR (Royals)', sport: 'cricket', name: 'Rajiv Gandhi Intl Stadium' },
     { sid: 'wembley', home: 'Manchester City', away: 'Arsenal', sport: 'football', name: 'Wembley Stadium' },
     { sid: 'msg', home: 'NY Knicks', away: 'MIAMI HEAT', sport: 'basketball', name: 'Madison Square Garden' },
-    { sid: 'eden_gardens', home: 'KKR (Knights)', away: 'CSK (Super Kings)', sport: 'cricket', name: 'Eden Gardens' }
+    { sid: 'eden_gardens', home: 'KKR (Knights)', away: 'CSK (Super Kings)', sport: 'cricket', name: 'Eden Gardens' },
+    { sid: 'chinnaswamy', home: 'RCB (Challengers)', away: 'MI (Indians)', sport: 'cricket', name: 'M. Chinnaswamy Stadium' },
+    { sid: 'chepauk', home: 'CSK (Super Kings)', away: 'GT (Titans)', sport: 'cricket', name: 'M. A. Chidambaram Stadium' }
   ],
   '2026-04-15': [
     { sid: 'eden_gardens', home: 'KKR (Knights)', away: 'MI (Indians)', sport: 'cricket', name: 'Eden Gardens' },
     { sid: 'camp_nou', home: 'Barcelona', away: 'PSG', sport: 'football', name: 'Camp Nou' },
-    { sid: 'ahmedabad_stadium', home: 'GT (Titans)', away: 'SRH (Sunrisers)', sport: 'cricket', name: 'Narendra Modi Stadium' }
+    { sid: 'ahmedabad_stadium', home: 'GT (Titans)', away: 'SRH (Sunrisers)', sport: 'cricket', name: 'Narendra Modi Stadium' },
+    { sid: 'wankhede', home: 'MI (Indians)', away: 'LSG (Giants)', sport: 'cricket', name: 'Wankhede Stadium' },
+    { sid: 'delhi_stadium', home: 'DC (Capitals)', away: 'PBKS (Kings)', sport: 'cricket', name: 'Arun Jaitley Stadium' }
   ]
 };
 
@@ -211,6 +223,7 @@ function applyRealitySync() {
       state.awayWickets = live.awayWickets;
       state.target = live.target;
       state.status = live.status;
+      state.toss = live.toss || 'Waiting for toss...';
       state.stadiumName = live.stadiumName;
       console.log(`📡 REALITY SYNC: Pushed live data for ${sid} (${state.homeTeam} vs ${state.awayTeam})`);
     }
@@ -235,7 +248,28 @@ const GOOGLE_REALITY_FEED = {
     homeScore: 0, homeWickets: 0,
     awayScore: 0, awayWickets: 0,
     target: 0, status: 'pre_match',
+    toss: 'CSK won the toss & elected to bowl first',
     result: 'Starting soon at 7:30 PM'
+  },
+  'chinnaswamy': {
+    homeTeam: 'RCB (Challengers)',
+    awayTeam: 'MI (Indians)',
+    stadiumName: 'M. Chinnaswamy Stadium',
+    homeScore: 0, homeWickets: 0,
+    awayScore: 0, awayWickets: 0,
+    target: 0, status: 'pre_match',
+    toss: 'Toss at 7:00 PM',
+    result: 'Upcoming Match'
+  },
+  'chepauk': {
+    homeTeam: 'CSK (Super Kings)',
+    awayTeam: 'GT (Titans)',
+    stadiumName: 'M. A. Chidambaram Stadium',
+    homeScore: 178, homeWickets: 4,
+    awayScore: 177, awayWickets: 7,
+    target: 178, status: 'post_match',
+    toss: 'GT won toss & batted first',
+    result: 'CSK won by 6 wickets'
   }
 };
 

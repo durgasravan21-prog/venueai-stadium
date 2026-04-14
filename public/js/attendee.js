@@ -138,16 +138,19 @@ socket.on('match_update', data => {
 });
 
 const STADIUM_MAP = {
-  metastadium: 'MetaStadium Arena',
-  eden: 'Eden Gardens',
-  wankhede: 'Wankhede Stadium',
-  chepauk: 'Chepauk Stadium',
-  chinnaswamy: 'Chinnaswamy Stadium',
-  saltlake: 'Salt Lake Stadium',
-  jawaharlal: 'Jawaharlal Nehru Stadium',
-  indira: 'Indira Gandhi Arena',
-  smc: 'SMC Indoor Complex',
-  hyderabad_stadium: 'Rajiv Gandhi Intl Stadium',
+  'hyderabad_stadium': 'Rajiv Gandhi Intl Stadium',
+  'eden_gardens': 'Eden Gardens',
+  'chinnaswamy': 'M. Chinnaswamy Stadium',
+  'chepauk': 'M. A. Chidambaram Stadium',
+  'wankhede': 'Wankhede Stadium',
+  'delhi_stadium': 'Arun Jaitley Stadium',
+  'dharamshala_stadium': 'HPCA Stadium',
+  'ekana_stadium': 'Ekana Stadium',
+  'jaipur_stadium': 'Sawai Mansingh Stadium',
+  'mohali_stadium': 'IS Bindra Stadium',
+  'ahmedabad_stadium': 'Narendra Modi Stadium',
+  'lords': "Lord's Cricket Ground",
+  'mcg': 'Melbourne Cricket Ground'
 };
 
 function showStadiumSelector() {
@@ -179,6 +182,13 @@ function updateMatchUI(data) {
 
   setText('matchStatus', data.status.replace(/_/g,' ').toUpperCase());
   setText('matchMinute', data.minute > 0 ? data.minute + "'" : '');
+
+  // Toss Update
+  const tossEl = document.getElementById('matchToss');
+  if (tossEl) {
+    tossEl.innerText = data.toss || 'Waiting for toss...';
+    tossEl.style.display = data.status === 'pre_match' || data.status === 'first_half' ? 'block' : 'none';
+  }
 
   // Target Update
   const targetEl = document.getElementById('targetScore');
