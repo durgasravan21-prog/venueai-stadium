@@ -649,6 +649,18 @@ app.get('/api/match', (req, res) => {
     data: stadiumStates[sid] || stadiumStates['hyderabad_stadium']
   });
 });
+app.post('/api/match/sync', (req, res) => {
+  const { enabled, stadiumId } = req.body;
+  const sid = stadiumId || 'hyderabad_stadium';
+  if (stadiumStates[sid]) {
+    stadiumStates[sid].worldSyncMode = enabled;
+    if (enabled) applyRealitySync(); // trigger immediately
+    io.to(`stadium_${sid}`).emit('match_update', stadiumStates[sid]);
+    res.json({ success: true, enabled: stadiumStates[sid].worldSyncMode });
+  } else {
+    res.status(404).json({ success: false, message: 'Stadium not found' });
+  }
+});
 
 app.post('/api/stadium/:id/venue', (req, res) => {
   const sid = req.params.id;
