@@ -139,14 +139,33 @@ const verifyToken = (req, res, next) => {
   }
 };
 
+// Staff credentials: stadiumname@gmail.com / stadiumname@_21056
+// Built lazily to avoid referencing STADIUMS_KNOWLEDGE_BASE before it's defined
+let STAFF_CREDENTIALS = null;
+function getStaffCredentials() {
+  if (STAFF_CREDENTIALS) return STAFF_CREDENTIALS;
+  STAFF_CREDENTIALS = {};
+  if (typeof STADIUMS_KNOWLEDGE_BASE !== 'undefined' && Array.isArray(STADIUMS_KNOWLEDGE_BASE)) {
+    STADIUMS_KNOWLEDGE_BASE.forEach(s => {
+      const key = s.id.replace(/_/g, '');
+      STAFF_CREDENTIALS[`${key}@gmail.com`] = `${key}@_21056`;
+    });
+  }
+  // Universal admin login
+  STAFF_CREDENTIALS['admin@gmail.com'] = 'admin@_21056';
+  return STAFF_CREDENTIALS;
+}
+
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body;
-  if (username === 'admin' && password === 'admin123') {
-    const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET || 'venueai_secure_hash', { expiresIn: '12h' });
+  const creds = getStaffCredentials();
+  const expectedPass = creds[username?.toLowerCase()];
+  if (expectedPass && password === expectedPass) {
+    const token = jwt.sign({ role: 'admin', user: username }, process.env.JWT_SECRET || 'venueai_secure_hash', { expiresIn: '12h' });
     res.cookie('admin_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
     res.json({ success: true });
   } else {
-    res.status(401).json({ success: false, error: 'Invalid credentials' });
+    res.status(401).json({ success: false, error: 'Invalid credentials. Use stadiumname@gmail.com / stadiumname@_21056' });
   }
 });
 
@@ -911,34 +930,7 @@ app.post('/api/venue/settings', (req, res) => {
   res.json({ success: true, data: getStadiumStats(sid) });
 });
 
-// --- Stadium Listing already defined above at line 800 ---
-
-// --- Match State ---
-app.get('/api/match', (req, res) => {
-  const sid = req.query.stadiumId || 'hyderabad_stadium';
-  const state = stadiumStates[sid] || stadiumStates['hyderabad_stadium'];
-  res.json({ success: true, data: state });
-});
-
-app.post('/api/match/sync', (req, res) => {
-  const { enabled, stadiumId } = req.body;
-  const sid = stadiumId || 'hyderabad_stadium';
-  const matchState = stadiumStates[sid];
-  
-  if (!matchState) return res.status(404).json({ success:false, error:'Stadium not found' });
-
-  matchState.worldSyncMode = !!enabled;
-  
-  if (enabled && sid === 'hyderabad_stadium') {
-    matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
-    matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
-    matchState.status = GOOGLE_REALITY_FEED.status;
-  }
-
-  addAlert(enabled ? 'success' : 'warning', `🌍 [${matchState.stadiumName}] Google AI Sync ${enabled ? 'CONNECTED' : 'DISCONNECTED'}`, 'match');
-  io.to(`stadium_${sid}`).emit('match_update', matchState);
-  res.json({ success: true, enabled: matchState.worldSyncMode });
-});
+// --- (Duplicate match routes removed — primary definitions are above) ---
 
 app.post('/api/match/control', (req, res) => {
   const { action, stadiumId } = req.body;
@@ -1076,10 +1068,14 @@ app.get('/api/food/concessions', (req, res) => {
 });
 
 app.post('/api/food/order', (req, res) => {
-  const { items, zone, seat, concessionId } = req.body;
+  const { items, zone, seat, concessionId, stadiumId } = req.body;
   if (!items || !items.length) {
     return res.status(400).json({ success: false, error: 'No items specified' });
   }
+
+  const sid = stadiumId || req.query.stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid] || stadiumVenues['hyderabad_stadium'];
+  if (!VENUE) return res.status(404).json({ success: false, error: 'Stadium not found' });
 
   const concession = concessionId
     ? VENUE.concessions.find(c => c.id === concessionId)
@@ -1138,8 +1134,12 @@ app.post('/api/food/orders/:id/complete', (req, res) => {
   if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
   order.status = 'delivered';
   syncOrder(order);
-  const concession = VENUE.concessions.find(c => c.id === order.concessionId);
-  if (concession) concession.orders_pending = Math.max(0, concession.orders_pending - 1);
+  const sid = req.body.stadiumId || req.query.stadiumId || 'hyderabad_stadium';
+  const VENUE = stadiumVenues[sid] || stadiumVenues['hyderabad_stadium'];
+  if (VENUE) {
+    const concession = VENUE.concessions.find(c => c.id === order.concessionId);
+    if (concession) concession.orders_pending = Math.max(0, concession.orders_pending - 1);
+  }
   io.emit('order_update', order);
   res.json({ success: true, data: order });
 });

@@ -234,8 +234,10 @@ const STADIUM_MAP = {
 };
 
 function showStadiumSelector() {
-  const overlay = document.getElementById('stadiumOverlay');
+  const overlay = document.getElementById('stadiumSelectorOverlay');
   if (overlay) overlay.style.display = 'flex';
+  const hero = document.getElementById('mainHero');
+  if (hero) hero.style.display = 'none';
   loadStadiums();
 }
 
@@ -667,7 +669,7 @@ async function placeOrder() {
     // Step 1: Create order via API (triggers demo payment flow)
     const res  = await fetch('/api/payment/create-order', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ items: cart, zone, seat })
+      body: JSON.stringify({ items: cart, zone, seat, stadiumId: currentStadiumId || 'hyderabad_stadium' })
     });
     const data = await res.json();
 
@@ -764,8 +766,9 @@ async function getRoute() {
   const gate = venueState?.gates ? [...venueState.gates].sort((a,b)=>a.queue_length-b.queue_length)[0]?.id : 'A';
   const btn  = document.querySelector('.nav-btn');
   if (btn) { btn.disabled = true; btn.innerText = '🔎 Finding route...'; }
+  const sid = currentStadiumId || 'hyderabad_stadium';
   try {
-    const res  = await fetch(`/api/routing/optimal?to=${dest}&gate=${gate}`);
+    const res  = await fetch(`/api/routing/optimal?to=${dest}&gate=${gate}&stadiumId=${sid}`);
     const data = await res.json();
     if (!data.success) return showToast('Could not calculate route', 'danger');
 
