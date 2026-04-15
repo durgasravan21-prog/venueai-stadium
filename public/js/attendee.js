@@ -75,19 +75,61 @@ document.addEventListener('DOMContentLoaded', () => {
   const authBtn = document.getElementById('googleLoginBtn');
   if (authBtn) {
     authBtn.addEventListener('click', () => {
-      // Simulation of Google Login for now, or use Firebase Client if keys provided
-      console.log("🔑 Google Login Triggered...");
-      const dummyUser = { name: 'Attendee', email: 'user@example.com' };
-      sessionStorage.setItem('venue_user', JSON.stringify(dummyUser));
+      authBtn.innerHTML = '⏳ Connecting to Google...';
+      authBtn.disabled = true;
+      authBtn.style.opacity = '0.7';
+
+      // Create realistic Google OAuth Modal simulation
+      const modal = document.createElement('div');
+      modal.style.position = 'fixed';
+      modal.style.inset = '0';
+      modal.style.background = 'rgba(0,0,0,0.6)';
+      modal.style.display = 'flex';
+      modal.style.alignItems = 'center';
+      modal.style.justifyContent = 'center';
+      modal.style.zIndex = '99999';
+      modal.style.backdropFilter = 'blur(4px)';
       
-      // Transition to selector
-      document.getElementById('authOverlay').style.transition = 'opacity 0.5s';
-      document.getElementById('authOverlay').style.opacity = '0';
-      setTimeout(() => {
-        document.getElementById('authOverlay').style.display = 'none';
-        document.getElementById('stadiumSelectorOverlay').style.display = 'flex';
-        loadStadiums();
-      }, 500);
+      modal.innerHTML = `
+        <div style="background:#fff;color:#202124;font-family:sans-serif;width:90%;max-width:400px;border-radius:8px;padding:36px;box-shadow:0 4px 12px rgba(0,0,0,0.15);text-align:center;">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google Logo" style="width:36px;margin-bottom:16px;">
+          <h2 style="font-size:24px;font-weight:400;margin-bottom:8px;">Sign in with Google</h2>
+          <p style="font-size:16px;color:#5f6368;margin-bottom:32px;">Choose an account to continue to <b>VenueAI</b></p>
+          
+          <div id="demoGoogleAccount" style="display:flex;align-items:center;padding:12px 16px;border:1px solid #dadce0;border-radius:6px;cursor:pointer;transition:background 0.2s;text-align:left;">
+            <div style="width:36px;height:36px;border-radius:50%;background:#1a73e8;color:#fff;display:flex;align-items:center;justifyContent:center;font-size:18px;font-weight:500;margin-right:12px;justify-content:center;">A</div>
+            <div>
+              <div style="font-weight:500;font-size:14px;color:#3c4043;">Attendee User</div>
+              <div style="font-size:12px;color:#5f6368;">attendee.fan@gmail.com</div>
+            </div>
+          </div>
+          
+          <p style="font-size:12px;color:#70757a;margin-top:32px;">This is a simulated OAuth screen.</p>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      const accountDiv = document.getElementById('demoGoogleAccount');
+      accountDiv.addEventListener('mouseover', () => accountDiv.style.background = '#f8f9fa');
+      accountDiv.addEventListener('mouseout', () => accountDiv.style.background = 'transparent');
+      
+      accountDiv.addEventListener('click', () => {
+        accountDiv.innerHTML = '<div style="text-align:center;width:100%;color:#1a73e8;font-weight:500;">Signing in...</div>';
+        setTimeout(() => {
+          document.body.removeChild(modal);
+          const dummyUser = { name: 'Attendee', email: 'attendee.fan@gmail.com' };
+          sessionStorage.setItem('venue_user', JSON.stringify(dummyUser));
+          
+          authBtn.innerHTML = '✅ Signed In';
+          document.getElementById('authOverlay').style.transition = 'opacity 0.5s';
+          document.getElementById('authOverlay').style.opacity = '0';
+          setTimeout(() => {
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('stadiumSelectorOverlay').style.display = 'flex';
+            loadStadiums();
+          }, 500);
+        }, 1200);
+      });
     });
   }
   
