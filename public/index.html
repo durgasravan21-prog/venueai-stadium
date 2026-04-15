@@ -40,13 +40,44 @@
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=DEMO_KEY&libraries=places"></script>
   <!-- Google Identity Services for true OAuth -->
   <script async defer src="https://accounts.google.com/gsi/client"></script>
-  <!-- Firebase Client SDK -->
+  <!-- Firebase Client SDK for REAL Google Authentication -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getAuth } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-    const firebaseConfig = { apiKey: "demo-key", projectId: "venueai-production" };
+    import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+    
+    // Developer: Replace these with your actual Firebase config keys
+    const firebaseConfig = { 
+      apiKey: "YOUR_FIREBASE_API_KEY", 
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID" 
+    };
+    
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    window.triggerGoogleAuth = () => {
+      const btn = document.getElementById('googleLoginBtn');
+      if(btn) { btn.innerHTML = '⏳ Waiting for Google...'; btn.disabled = true; }
+      
+      signInWithPopup(auth, provider)
+        .then((result) => {
+          const user = result.user;
+          sessionStorage.setItem('venue_user', JSON.stringify({ name: user.displayName, email: user.email }));
+          
+          document.getElementById('authOverlay').style.opacity = '0';
+          setTimeout(() => {
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('stadiumSelectorOverlay').style.display = 'flex';
+            if (typeof loadStadiums === 'function') loadStadiums();
+          }, 500);
+        })
+        .catch((error) => {
+          console.error("Google Auth Error:", error);
+          if(btn) { btn.innerHTML = '❌ Auth Failed - Try Again'; btn.disabled = false; }
+          alert("Authentication Failed. Please check your Firebase API Keys in index.html.");
+        });
+    };
   </script>
 
   <!-- Fonts -->
@@ -89,7 +120,7 @@
       <p>Please sign in to access your digital stadium experience</p>
       
       <div class="auth-box">
-        <button id="googleLoginBtn" class="btn btn-secondary btn-full" style="background:#fff; color:#000; font-size:1rem; gap:12px; margin-top:24px;">
+        <button id="googleLoginBtn" class="btn btn-secondary btn-full" style="background:#fff; color:#000; font-size:1rem; gap:12px; margin-top:24px;" onclick="if(window.triggerGoogleAuth) window.triggerGoogleAuth()">
           <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="" style="width:18px;">
           Sign in with Google
         </button>
