@@ -65,18 +65,37 @@ app.use(helmet({
       styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
       fontSrc:     ["'self'", 'https://fonts.gstatic.com', 'data:'],
       imgSrc:      ["'self'", 'data:', 'blob:', 'https://images.unsplash.com', 'https://*.unsplash.com'],
-      connectSrc:  ["'self'", 'wss:', 'ws:', 'https:', 'http:'],
+      connectSrc:  ["'self'", 'wss:', 'ws:', 'https:', 'http:', 'https://*.firebaseio.com', 'https://*.googleapis.com'],
       frameSrc:    ["'self'", 'https://checkout.razorpay.com'],
       objectSrc:   ["'none'"],
       workerSrc:   ["'self'", 'blob:'],
     },
   },
-  crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-      connectSrc:  ["'self'", 'ws:', 'wss:', 'https://*.firebaseio.com', 'https://*.googleapis.com']
+  hidePoweredBy: true,
+  xssFilter: true,
+  noSniff: true,
+  frameguard: { action: 'deny' },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }, // HTTPS Security
+  referrerPolicy: { policy: 'no-referrer' },
+  permissionsPolicy: {
+    features: {
+      geolocation: ["'none'"], camera: ["'none'"], microphone: ["'none'"], payment: ["'self'"]
     }
   }
 }));
+
+// ── ADVANCED BOT PROTECTION ───────────────────────────────────────
+const BOT_WHITELIST = ['googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider', 'yandexbot'];
+app.use((req, res, next) => {
+  const ua = (req.headers['user-agent'] || '').toLowerCase();
+  const isSuspicious = [/python-requests/i, /curl/i, /postman/i, /insomnia/i, /bot/i, /spider/i].some(r => r.test(ua));
+  const isKnownGood = BOT_WHITELIST.some(bot => ua.includes(bot));
+  
+  if (isSuspicious && !isKnownGood) {
+    return res.status(403).json({ success: false, error: 'Suspicious activity detected. Access denied.' });
+  }
+  next();
+});
 app.use(compression());
 const hpp = require('hpp');
 app.use(hpp());
@@ -385,15 +404,6 @@ const GOOGLE_REALITY_FEED = {
     homeTeam: 'SRH (Sunrisers)',
     awayTeam: 'RR (Royals)',
     stadiumName: 'Rajiv Gandhi Intl Stadium',
-    homeScore: 216, homeWickets: 6,
-    awayScore: 159, awayWickets: 10,
-    target: 217, status: 'post_match',
-    result: 'SRH won by 57 runs'
-  },
-  'hyderabad_stadium': {
-    homeTeam: 'SRH (Sunrisers)',
-    awayTeam: 'RR (Royals)',
-    stadiumName: 'Rajiv Gandhi Intl Stadium',
     homeScore: 165, homeWickets: 4,
     awayScore: 168, awayWickets: 2,
     target: 166, status: 'post_match',
@@ -411,25 +421,11 @@ const GOOGLE_REALITY_FEED = {
     toss: 'CSK won toss & elected to field',
     result: 'CSK needing 60 from 24 balls'
   },
-  'chinnaswamy': {
-    homeTeam: 'CSK (Super Kings)',
-    awayTeam: 'KKR (Knights)',
-    stadiumName: 'M. Chinnaswamy Stadium',
-    homeScore: 171, homeWickets: 2,
-    awayScore: 170, awayWickets: 7,
-    target: 171, status: 'second_half',
-    minute: 19, // 19th over
-    toss: 'CSK won toss & elected to bowl',
-    result: 'CSK needing 2 runs to win'
-  },
   'chepauk': {
-    homeTeam: 'CSK (Super Kings)',
-    awayTeam: 'KKR (Knights)',
+    homeTeam: 'CSK (Super Kings)', awayTeam: 'KKR (Knights)',
     stadiumName: 'M. A. Chidambaram Stadium',
-    homeScore: 171, homeWickets: 2,
-    awayScore: 170, awayWickets: 7,
-    target: 171, status: 'second_half',
-    minute: 19, // 19th over
+    homeScore: 171, homeWickets: 2, awayScore: 170, awayWickets: 7,
+    target: 171, status: 'second_half', minute: 19,
     toss: 'CSK won toss & elected to bowl',
     result: 'CSK needing 2 runs to win'
   }
@@ -1549,6 +1545,15 @@ app.get('/api/stadium/:id', (req, res) => {
 
 // Serve pages
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// ── SECURITY.TXT (Industry Standard Security) ───────────────────
+app.get(['/security.txt', '/.well-known/security.txt'], (req, res) => {
+  res.type('text/plain').send(`Contact: mailto:security@venueai-stadium.com
+Expires: 2026-12-31T23:59:59z
+Acknowledgments: https://venueai-stadium.vercel.app/hall-of-fame
+Preferred-Languages: en
+Canonical: https://venueai-stadium.vercel.app/security.txt`);
+});
 // Dashboard is protected above
 
 
@@ -1599,22 +1604,52 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================================
-// START SERVER
+// START SERVER & AGENTS
 // ============================================================
 
 const PORT = process.env.PORT || 3000;
+
+// Health Check for Vercel/Monitoring
+app.get(['/api/health', '/health'], (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+    firebase: !!db
+  });
+});
+
 if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
   server.listen(PORT, () => {
     console.log(`\n🏟️  VenueAI Multi-Stadium Server running at http://localhost:${PORT}`);
   });
 }
 
-// ─── INITIALIZE AGENTS (Disabled in test env to prevent open handles) ───────
-refreshDailySchedule(); // Select today's matches
-applyRealitySync();     // Initial sync
+// ─── SAFE AGENT INITIALIZATION ───────────────────────────────────
+async function initializeAgents() {
+  try {
+    console.log("🤖 Starting AI Stadium Agents...");
+    await loadStadiumData();
+    refreshDailySchedule();
+    applyRealitySync();
+    console.log("✅ Agents initialized and synced.");
+  } catch (err) {
+    console.error("❌ Agent Initialization Failed:", err.message);
+  }
+}
 
-if (process.env.NODE_ENV !== 'test') {
-  setInterval(refreshDailySchedule, 3600000); // Check once an hour for date change
+// Trigger initial load but don't block
+initializeAgents().catch(() => {});
+
+if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'production') {
+  // We use intervals sparingly in serverless; ideally these would be CRONs
+  setInterval(refreshDailySchedule, 3600000);
+} else if (process.env.NODE_ENV !== 'test') {
+  setInterval(refreshDailySchedule, 3600000);
+  setInterval(() => {
+    // Reality sync intervals for local dev
+  }, 15000);
+}
 
   // REAL-TIME DYNAMIC AGENT (Mimics Google Fetching every 15s)
   setInterval(() => {
