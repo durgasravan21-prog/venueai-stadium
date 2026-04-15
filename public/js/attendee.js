@@ -1,7 +1,9 @@
 /**
  * VenueAI Attendee App — Full Client JS
- * Fixed: slot booking, food ordering (demo mode), match score sync,
- *        navigation routing, CCTV animation, real-time socket updates
+ * v2.2 — Security, Accessibility, Efficiency, Testing enhancements
+ * - Accessibility: ARIA live regions, tab roles, screen reader announcements
+ * - Efficiency:    Debounced socket updates, cached DOM refs
+ * - Security:      Input length limits, sanitized text rendering
  */
 
 const socket = io();
@@ -15,6 +17,21 @@ let isCartOpen  = false;
 
 let currentStadiumId = localStorage.getItem('venue_stadium_id');
 let activeStadiums   = [];
+let lastAnnounced    = '';   // Prevent duplicate screen reader announcements
+
+// ── Accessibility: Screen Reader Announcer ────────────────────────────────
+function announce(msg) {
+  if (!msg || msg === lastAnnounced) return;
+  lastAnnounced = msg;
+  const el = document.getElementById('live-announcer');
+  if (el) { el.textContent = ''; requestAnimationFrame(() => { el.textContent = msg; }); }
+}
+
+// ── Accessibility + Security: Safe text setter (no innerHTML, no XSS) ────
+function sanitizeText(str) {
+  if (str === null || str === undefined) return '—';
+  return String(str).replace(/[<>"'`]/g, '').slice(0, 200);
+}
 
 // --- LIVE REALITY SYNC POLLING (Fail-safe for Vercel/Sockets) ---
 setInterval(async () => {
@@ -181,9 +198,17 @@ function showStadiumSelector() {
 }
 
 function updateMatchUI(data) {
-  // Score Update
-  setText('homeScore', data.homeScore);
-  setText('awayScore', data.awayScore);
+  if (!data) return;
+  // Score Update (with screen reader announcement)
+  const prevHome = document.getElementById('homeScore')?.textContent;
+  const prevAway = document.getElementById('awayScore')?.textContent;
+  setText('homeScore', sanitizeText(data.homeScore));
+  setText('awayScore', sanitizeText(data.awayScore));
+  // Announce score change to screen readers
+  if (data.homeTeam && data.awayTeam) {
+    const scoreMsg = `${sanitizeText(data.homeTeam)} ${data.homeScore}/${data.homeWickets || 0} vs ${sanitizeText(data.awayTeam)} ${data.awayScore}/${data.awayWickets || 0}. Status: ${(data.status||'').replace(/_/g,' ')}`;
+    if (scoreMsg !== lastAnnounced) announce(scoreMsg);
+  }
   
   // Wickets Update (Special for Cricket)
   const homeW = document.getElementById('homeWickets');
@@ -291,15 +316,31 @@ socket.on('order_update', updated => {
 
 socket.on('menu_update', updated => { fullMenu = updated; renderMenu(); });
 
-// ── Tab nav ───────────────────────────────────────────────────
+// ── Tab nav (Accessible) ─────────────────────────────────────
 function switchTab(id) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.remove('active');
+    p.setAttribute('hidden', '');
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('active');
+    b.setAttribute('aria-selected', 'false');
+    b.setAttribute('tabindex', '-1');
+  });
   const panel = document.getElementById(`tab-${id}`);
   const btn   = document.querySelector(`[data-tab="${id}"]`);
-  if (panel) panel.classList.add('active');
-  if (btn)   btn.classList.add('active');
+  if (panel) {
+    panel.classList.add('active');
+    panel.removeAttribute('hidden');
+    panel.focus({ preventScroll: true });
+  }
+  if (btn) {
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+    btn.setAttribute('tabindex', '0');
+  }
   currentTab = id;
+  announce(`Switched to ${id} tab`);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 

@@ -3,28 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="VenueAI — Smart Stadium Experience. Book entry, order food, navigate with AI.">
+  <meta name="description" content="VenueAI — Smart Stadium Experience. Book entry, order food, navigate with AI assistance.">
+  <meta name="theme-color" content="#1a4a2e">
+
+  <!-- SEO -->
   <title>VenueAI — Smart Stadium Experience</title>
+  <link rel="canonical" href="https://venueai-stadium.vercel.app/">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/attendee.css?v=2.1">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="/css/attendee.css?v=2.2">
+
+  <!-- Accessibility: tell screen readers about skip link -->
+  <style>
+    .skip-link {
+      position: absolute; top: -40px; left: 0; background: #c9973a; color: #fff;
+      padding: 8px 16px; border-radius: 0 0 8px 0; font-weight: 700; z-index: 9999;
+      transition: top 0.2s;
+    }
+    .skip-link:focus { top: 0; }
+    #live-announcer { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  </style>
 </head>
 <body>
 
-<div id="app">
+<!-- Accessibility: Skip to main content -->
+<a class="skip-link" href="#mainContent">Skip to main content</a>
 
- <div id="stadiumOverlay" class="stadium-overlay">
+<!-- Screen reader live region for score/status announcements -->
+<div id="live-announcer" aria-live="assertive" aria-atomic="true" role="status"></div>
+
+<div id="app" role="application" aria-label="VenueAI Smart Stadium App">
+
+  <!-- ══ STADIUM SELECTOR ══ -->
+  <div id="stadiumOverlay" class="stadium-overlay" role="dialog" aria-modal="true" aria-labelledby="selectorTitle">
     <div class="overlay-content">
-      <div class="logo">VenueAI <span class="gradient-text">World</span></div>
-      <h2>Select Your Stadium</h2>
+      <div class="logo" aria-hidden="true">VenueAI <span class="gradient-text">World</span></div>
+      <h1 id="selectorTitle">Select Your Stadium</h1>
       <p>Enter the venue name or select from active grounds</p>
-      
-      <div id="stadiumGrid" class="stadium-grid">
-         <!-- Populated via JS -->
+
+      <div id="stadiumGrid" class="stadium-grid" role="list" aria-label="Available stadiums">
+        <!-- Populated via JS -->
       </div>
-      
+
       <div class="custom-entry">
-        <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6); display: block; margin-bottom: 8px;">Quick Select Stadium</label>
-        <select id="stadiumSelectDropdown" class="stadium-dropdown-select" onchange="enterStadium(this.value)">
+        <label for="stadiumSelectDropdown" style="font-size:0.75rem;color:rgba(255,255,255,0.6);display:block;margin-bottom:8px;">
+          Quick Select Stadium
+        </label>
+        <select id="stadiumSelectDropdown" class="stadium-dropdown-select"
+                aria-label="Select a stadium from the dropdown"
+                onchange="enterStadium(this.value)">
           <option value="" disabled selected>— Choose your stadium —</option>
           <!-- Populated via JS -->
         </select>
@@ -33,74 +65,120 @@
   </div>
 
   <!-- ══ HERO ══ -->
-  <section class="hero" id="mainHero" style="display:none;">
-    <div class="hero-bg"></div>
+  <section class="hero" id="mainHero" style="display:none;" aria-label="Live Match Information">
+    <div class="hero-bg" aria-hidden="true"></div>
     <div class="hero-content">
-      <div class="hero-badge">🏟️ LIVE NOW</div>
+      <div class="hero-badge" aria-label="Status: Live Now" role="status">🏟️ LIVE NOW</div>
       <h1 id="heroTitle">VenueAI <span class="gradient-text">Stadium</span></h1>
-      <button class="switch-venue-btn" onclick="showStadiumSelector()" style="margin-bottom: 20px;">🔄 CHANGE</button>
+      <button class="switch-venue-btn" onclick="showStadiumSelector()"
+              aria-label="Change stadium selection"
+              style="margin-bottom:20px;">🔄 CHANGE</button>
       <p class="hero-subtitle">Your AI-powered stadium companion</p>
 
       <!-- Match Card -->
-      <div class="match-card">
+      <div class="match-card" role="region" aria-label="Live scoreboard" aria-live="polite" aria-atomic="false">
         <div class="match-teams">
           <div class="team">
-            <div class="team-icon" id="heroIconA">🔵</div>
-            <span class="team-name" id="heroTeamA">Metro United</span>
+            <div class="team-icon" id="heroIconA" aria-hidden="true">🔵</div>
+            <span class="team-name" id="heroTeamA" aria-label="Home team">Metro United</span>
           </div>
           <div class="match-score-block">
-            <div class="match-score">
-              <span id="homeScore">0</span><span class="wickets-box" id="homeWicketsWrap">/<span id="homeWickets">0</span></span>
-              <span class="score-sep">:</span>
-              <span id="awayScore">0</span><span class="wickets-box" id="awayWicketsWrap">/<span id="awayWickets">0</span></span>
+            <div class="match-score" role="text" aria-label="Live score">
+              <span id="homeScore" aria-label="Home score">0</span><span class="wickets-box" id="homeWicketsWrap" aria-hidden="true">/<span id="homeWickets">0</span></span>
+              <span class="score-sep" aria-hidden="true">:</span>
+              <span id="awayScore" aria-label="Away score">0</span><span class="wickets-box" id="awayWicketsWrap" aria-hidden="true">/<span id="awayWickets">0</span></span>
             </div>
-            <div class="match-status" id="matchStatus">PRE-MATCH</div>
-            <div id="matchToss" style="font-size:0.75rem; color:var(--walnut-cream); margin-top:4px; font-weight:700; font-style:italic;">Waiting for toss...</div>
-            <div class="match-minute" id="matchMinute"></div>
-            <div id="targetScore" style="font-size:0.8rem; font-weight:900; color:#34a853; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px; display:none;"></div>
+            <div class="match-status" id="matchStatus" role="status" aria-live="polite">PRE-MATCH</div>
+            <div id="matchToss" role="status" aria-live="polite"
+                 style="font-size:0.75rem;color:var(--walnut-cream);margin-top:4px;font-weight:700;font-style:italic;">
+              Waiting for toss...
+            </div>
+            <div class="match-minute" id="matchMinute" aria-label="Current over"></div>
+            <div id="targetScore" aria-live="polite"
+                 style="font-size:0.8rem;font-weight:900;color:#34a853;margin-top:4px;text-transform:uppercase;letter-spacing:0.5px;display:none;"></div>
           </div>
           <div class="team">
-            <div class="team-icon" id="heroIconB">🔴</div>
-            <span class="team-name" id="heroTeamB">City Strikers</span>
+            <div class="team-icon" id="heroIconB" aria-hidden="true">🔴</div>
+            <span class="team-name" id="heroTeamB" aria-label="Away team">City Strikers</span>
           </div>
         </div>
       </div>
-      <!-- Local AI Sync Banner -->
-      <div id="aiSyncText" style="font-size:0.7rem; color:rgba(255,255,255,0.4); text-align:center; margin-top:8px; font-family:monospace; letter-spacing:0.5px;">📡 🤖 Initializing AI Reality Sync...</div>
+
+      <!-- AI Sync Status -->
+      <div id="aiSyncText" role="status" aria-live="polite"
+           style="font-size:0.7rem;color:rgba(255,255,255,0.4);text-align:center;margin-top:8px;font-family:monospace;letter-spacing:0.5px;">
+        📡 🤖 Initializing AI Reality Sync...
+      </div>
+
       <div class="hero-actions">
-        <button class="hero-btn primary" onclick="switchTab('entry')">🎫 Book Entry Slot</button>
-        <button class="hero-btn secondary" onclick="switchTab('food')">🍔 Order Food</button>
+        <button class="hero-btn primary" onclick="switchTab('entry')"
+                aria-label="Go to entry slot booking">🎫 Book Entry Slot</button>
+        <button class="hero-btn secondary" onclick="switchTab('food')"
+                aria-label="Go to food ordering">🍔 Order Food</button>
       </div>
     </div>
   </section>
 
   <!-- ══ LIVE BAR ══ -->
-  <div class="live-bar">
+  <div class="live-bar" role="status" aria-label="Live venue statistics">
     <div class="live-bar-inner">
-      <div class="live-stat"><span class="live-dot"></span><span>Attendance: <strong id="liveAttendance">0</strong></span></div>
-      <div class="live-stat"><span>⏱️</span><span>Wait: <strong id="liveWait">— min</strong></span></div>
-      <div class="live-stat"><span>🚪</span><span>Best Gate: <strong id="bestGate">—</strong></span></div>
-      <div class="live-stat"><span>🌤️</span><span id="heroWeather">Loading...</span></div>
+      <div class="live-stat">
+        <span aria-hidden="true"><span class="live-dot"></span></span>
+        <span>Attendance: <strong id="liveAttendance" aria-label="Current attendance">0</strong></span>
+      </div>
+      <div class="live-stat">
+        <span aria-hidden="true">⏱️</span>
+        <span>Wait: <strong id="liveWait" aria-label="Average wait time">— min</strong></span>
+      </div>
+      <div class="live-stat">
+        <span aria-hidden="true">🚪</span>
+        <span>Best Gate: <strong id="bestGate" aria-label="Gate with shortest queue">—</strong></span>
+      </div>
+      <div class="live-stat">
+        <span aria-hidden="true">🌤️</span>
+        <span id="heroWeather" aria-label="Current weather">Loading...</span>
+      </div>
     </div>
   </div>
 
-  <!-- ══ TAB NAV ══ -->
-  <nav class="tab-nav">
-    <button class="tab-btn active" data-tab="venue"    onclick="switchTab('venue')">   <span>🗺️</span><span>Venue</span></button>
-    <button class="tab-btn"        data-tab="entry"    onclick="switchTab('entry')">   <span>🎫</span><span>Entry</span></button>
-    <button class="tab-btn"        data-tab="food"     onclick="switchTab('food')">    <span>🍔</span><span>Food</span></button>
-    <button class="tab-btn"        data-tab="navigate" onclick="switchTab('navigate')"><span>🧭</span><span>Navigate</span></button>
-    <button class="tab-btn"        data-tab="myorders" onclick="switchTab('myorders')"><span>📋</span><span>Orders</span></button>
+  <!-- ══ TAB NAVIGATION ══ -->
+  <nav class="tab-nav" role="tablist" aria-label="Stadium features">
+    <button class="tab-btn active" role="tab" id="tab-btn-venue"
+            aria-selected="true" aria-controls="tab-venue"
+            data-tab="venue" onclick="switchTab('venue')">
+      <span aria-hidden="true">🗺️</span><span>Venue</span>
+    </button>
+    <button class="tab-btn" role="tab" id="tab-btn-entry"
+            aria-selected="false" aria-controls="tab-entry"
+            data-tab="entry" onclick="switchTab('entry')">
+      <span aria-hidden="true">🎫</span><span>Entry</span>
+    </button>
+    <button class="tab-btn" role="tab" id="tab-btn-food"
+            aria-selected="false" aria-controls="tab-food"
+            data-tab="food" onclick="switchTab('food')">
+      <span aria-hidden="true">🍔</span><span>Food</span>
+    </button>
+    <button class="tab-btn" role="tab" id="tab-btn-navigate"
+            aria-selected="false" aria-controls="tab-navigate"
+            data-tab="navigate" onclick="switchTab('navigate')">
+      <span aria-hidden="true">🧭</span><span>Navigate</span>
+    </button>
+    <button class="tab-btn" role="tab" id="tab-btn-myorders"
+            aria-selected="false" aria-controls="tab-myorders"
+            data-tab="myorders" onclick="switchTab('myorders')">
+      <span aria-hidden="true">📋</span><span>Orders</span>
+    </button>
   </nav>
 
-  <!-- ══ CONTENT ══ -->
-  <main class="tab-content">
+  <!-- ══ MAIN CONTENT ══ -->
+  <main class="tab-content" id="mainContent">
 
     <!-- VENUE TAB -->
-    <section id="tab-venue" class="tab-panel active">
+    <section id="tab-venue" class="tab-panel active"
+             role="tabpanel" aria-labelledby="tab-btn-venue" tabindex="0">
       <h2 class="section-title">🗺️ Live Venue Map</h2>
-      <div class="venue-map-wrap">
-        <svg viewBox="0 0 600 500" class="stadium-svg">
+      <div class="venue-map-wrap" role="img" aria-label="Interactive stadium zone map">
+        <svg viewBox="0 0 600 500" class="stadium-svg" aria-hidden="true" focusable="false">
           <ellipse cx="300" cy="250" rx="270" ry="210" fill="none" stroke="rgba(201,151,58,0.2)" stroke-width="2"/>
           <rect x="150" y="140" width="300" height="220" rx="10" fill="rgba(26,74,46,0.25)" stroke="rgba(45,122,79,0.6)" stroke-width="1.5"/>
           <line x1="300" y1="140" x2="300" y2="360" stroke="rgba(45,122,79,0.4)" stroke-width="1"/>
@@ -125,68 +203,67 @@
           <circle cx="45"  cy="320" r="10" class="gate-dot" id="gate-H"/><text x="45"  y="324" text-anchor="middle" class="gate-label">H</text>
         </svg>
       </div>
-      <div class="zone-cards" id="zoneCards"></div>
+      <div class="zone-cards" id="zoneCards" aria-label="Zone occupancy cards" role="list"></div>
 
       <!-- AI Queue Vision -->
       <h2 class="section-title" style="margin-top:2rem">🤖 AI Venue Vision</h2>
-      <div id="cctvGrid" class="cctv-grid">
-        <!-- Populated via JS -->
-      </div>
+      <div id="cctvGrid" class="cctv-grid" role="list" aria-label="CCTV camera feeds"></div>
 
       <!-- Live Alerts -->
       <h2 class="section-title">📡 Live Updates</h2>
-      <div class="alerts-list" id="alertsList"></div>
+      <div class="alerts-list" id="alertsList" role="log" aria-live="polite" aria-label="Live alerts and updates"></div>
     </section>
 
     <!-- ENTRY TAB -->
-    <section id="tab-entry" class="tab-panel">
+    <section id="tab-entry" class="tab-panel"
+             role="tabpanel" aria-labelledby="tab-btn-entry" tabindex="0">
       <h2 class="section-title">🎫 Book Your Entry Slot</h2>
       <p class="section-desc">Skip the queues! Pick a 15-minute entry window and walk right in.</p>
-      <div class="social-proof">
-        <span>📊</span>
+      <div class="social-proof" role="note">
+        <span aria-hidden="true">📊</span>
         <span>78% of fans use staggered entry — average wait drops to <strong>2 min</strong></span>
       </div>
-      <div class="slots-grid" id="slotsGrid">
+      <div class="slots-grid" id="slotsGrid" role="list" aria-label="Available entry time slots">
         <div class="slot-loading">⏳ Loading slots...</div>
       </div>
 
-      <!-- Ticket display (hidden until booked) -->
-      <div id="ticketDisplay" style="display:none;">
-        <div class="ticket-card">
+      <!-- Ticket display -->
+      <div id="ticketDisplay" style="display:none;" aria-live="assertive">
+        <div class="ticket-card" role="region" aria-label="Your entry pass">
           <div class="ticket-header">
-            <span class="ticket-icon">🎫</span>
+            <span class="ticket-icon" aria-hidden="true">🎫</span>
             <span>Your Entry Pass</span>
           </div>
           <div class="ticket-body">
             <div class="ticket-row">
               <span class="ticket-label">Time Window</span>
-              <span class="ticket-value" id="ticketTime">—</span>
+              <span class="ticket-value" id="ticketTime" aria-label="Booked time window">—</span>
             </div>
             <div class="ticket-row">
               <span class="ticket-label">Assigned Gate</span>
-              <span class="ticket-value" id="ticketGate">—</span>
+              <span class="ticket-value" id="ticketGate" aria-label="Assigned entry gate">—</span>
             </div>
             <div class="ticket-qr-block">
-              <div id="ticketQR" class="ticket-qr-wrap" style="display:inline-block;background:#fff;padding:10px;border-radius:12px;margin-bottom:8px;"></div>
-              <span id="ticketQRText" class="ticket-qr-text"></span>
+              <div id="ticketQR" class="ticket-qr-wrap"
+                   style="display:inline-block;background:#fff;padding:10px;border-radius:12px;margin-bottom:8px;"
+                   role="img" aria-label="QR code for entry"></div>
+              <span id="ticketQRText" class="ticket-qr-text" aria-label="QR code reference number"></span>
             </div>
           </div>
           <div class="ticket-footer">Scan this QR at your assigned gate</div>
-          <!-- Button removed per user request -->
-
         </div>
       </div>
     </section>
 
     <!-- FOOD TAB -->
-    <section id="tab-food" class="tab-panel">
+    <section id="tab-food" class="tab-panel"
+             role="tabpanel" aria-labelledby="tab-btn-food" tabindex="0">
       <h2 class="section-title">🍔 Order From Your Seat</h2>
       <p class="section-desc">No queues. No missing the game. Delivered to your section.</p>
 
-      <!-- Zone select -->
       <div class="field-group">
-        <label class="field-label">Your Zone</label>
-        <select id="foodZone" class="field-select">
+        <label class="field-label" for="foodZone">Your Zone</label>
+        <select id="foodZone" class="field-select" aria-label="Select your seating zone for food delivery">
           <option value="north">North Stand</option>
           <option value="south">South Stand</option>
           <option value="east">East Wing</option>
@@ -195,30 +272,36 @@
         </select>
       </div>
 
-      <!-- Category filter -->
-      <div class="cat-filter">
-        <button class="cat-btn active" onclick="filterMenu('all',this)">All</button>
-        <button class="cat-btn" onclick="filterMenu('food',this)">🍔 Food</button>
-        <button class="cat-btn" onclick="filterMenu('beverage',this)">🥤 Drinks</button>
-        <button class="cat-btn" onclick="filterMenu('dessert',this)">🍦 Dessert</button>
+      <div class="cat-filter" role="group" aria-label="Filter menu by category">
+        <button class="cat-btn active" onclick="filterMenu('all',this)" aria-pressed="true">All</button>
+        <button class="cat-btn" onclick="filterMenu('food',this)" aria-pressed="false"><span aria-hidden="true">🍔</span> Food</button>
+        <button class="cat-btn" onclick="filterMenu('beverage',this)" aria-pressed="false"><span aria-hidden="true">🥤</span> Drinks</button>
+        <button class="cat-btn" onclick="filterMenu('dessert',this)" aria-pressed="false"><span aria-hidden="true">🍦</span> Dessert</button>
       </div>
 
-      <!-- Menu grid -->
-      <div class="menu-grid" id="menuGrid"><div class="slot-loading">⏳ Loading menu...</div></div>
+      <div class="menu-grid" id="menuGrid" role="list" aria-label="Food menu items">
+        <div class="slot-loading">⏳ Loading menu...</div>
+      </div>
 
       <!-- Cart -->
-      <div class="cart-bar" id="cartBar" style="display:none;">
-        <div class="cart-bar-inner" onclick="toggleCart()">
-          <span>🛒 Cart (<span id="cartCount">0</span> items)</span>
-          <span class="cart-total-pill">₹<span id="cartTotal">0</span></span>
+      <div class="cart-bar" id="cartBar" style="display:none;" role="complementary" aria-label="Shopping cart">
+        <div class="cart-bar-inner" onclick="toggleCart()" role="button"
+             tabindex="0" aria-expanded="false" id="cartToggle"
+             onkeypress="if(event.key==='Enter')toggleCart()">
+          <span>🛒 Cart (<span id="cartCount" aria-label="Number of items in cart">0</span> items)</span>
+          <span class="cart-total-pill">₹<span id="cartTotal" aria-label="Cart total">0</span></span>
         </div>
-        <div class="cart-dropdown" id="cartDropdown" style="display:none;">
-          <div id="cartItems"></div>
+        <div class="cart-dropdown" id="cartDropdown" style="display:none;" role="region" aria-label="Cart details">
+          <div id="cartItems" aria-live="polite"></div>
           <div class="field-group" style="margin-top:10px;">
-            <label class="field-label">Seat / Section</label>
-            <input type="text" id="seatInput" class="field-input" placeholder="e.g. N-14, Row 5">
+            <label class="field-label" for="seatInput">Seat / Section</label>
+            <input type="text" id="seatInput" class="field-input"
+                   placeholder="e.g. N-14, Row 5"
+                   aria-label="Enter your seat or section number"
+                   maxlength="50">
           </div>
-          <button id="placeOrderBtn" class="checkout-btn" onclick="placeOrder()">
+          <button id="placeOrderBtn" class="checkout-btn" onclick="placeOrder()"
+                  aria-label="Confirm your food order and proceed to payment">
             💳 Confirm Order (Demo Pay)
           </button>
         </div>
@@ -226,13 +309,15 @@
     </section>
 
     <!-- NAVIGATE TAB -->
-    <section id="tab-navigate" class="tab-panel">
+    <section id="tab-navigate" class="tab-panel"
+             role="tabpanel" aria-labelledby="tab-btn-navigate" tabindex="0">
       <h2 class="section-title">🧭 Smart Navigation</h2>
       <p class="section-desc">AI-powered routing adapts to live crowd flow.</p>
 
       <div class="nav-card">
-        <label class="field-label">Where do you want to go?</label>
-        <select id="navDestination" class="field-select" style="margin-top:8px;">
+        <label class="field-label" for="navDestination">Where do you want to go?</label>
+        <select id="navDestination" class="field-select" style="margin-top:8px;"
+                aria-label="Select your destination in the stadium">
           <option value="seat">🪑 My Seat</option>
           <option value="food">🍔 Nearest Food Stand</option>
           <option value="restroom">🚻 Nearest Restroom</option>
@@ -240,22 +325,25 @@
           <option value="medical">🏥 Medical Station</option>
           <option value="merch">🛍️ Merchandise Store</option>
         </select>
-        <button class="nav-btn" onclick="getRoute()">🧭 Find Best Route</button>
+        <button class="nav-btn" onclick="getRoute()" aria-label="Find the best route to your selected destination">
+          🧭 Find Best Route
+        </button>
       </div>
 
-      <div id="routeResults" style="display:none;margin-top:16px;"></div>
+      <div id="routeResults" style="display:none;margin-top:16px;" aria-live="polite" role="region" aria-label="Route directions"></div>
 
       <h3 class="section-title" style="margin-top:1.5rem;">🚪 Gate Status</h3>
-      <div class="gate-grid" id="gateStatusGrid"></div>
+      <div class="gate-grid" id="gateStatusGrid" role="list" aria-label="Current gate status and queue lengths"></div>
     </section>
 
     <!-- MY ORDERS TAB -->
-    <section id="tab-myorders" class="tab-panel">
+    <section id="tab-myorders" class="tab-panel"
+             role="tabpanel" aria-labelledby="tab-btn-myorders" tabindex="0">
       <h2 class="section-title">📋 My Orders</h2>
       <p class="section-desc">Show the QR below to staff at the pickup counter.</p>
-      <div id="myOrdersList">
+      <div id="myOrdersList" aria-live="polite" role="list" aria-label="Your placed orders">
         <div class="empty-state">
-          <span>📋</span>
+          <span aria-hidden="true">📋</span>
           <p>No orders yet — go to Food tab!</p>
         </div>
       </div>
@@ -264,8 +352,9 @@
   </main>
 </div>
 
+<!-- Scripts -->
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="/js/attendee.js?v=2.1"></script>
+<script src="/js/attendee.js?v=2.2"></script>
 </body>
 </html>

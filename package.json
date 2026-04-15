@@ -1,21 +1,47 @@
 {
   "name": "venueai-smart-stadium",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "AI-Powered Smart Venue Management System for Large-Scale Sporting Events",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "jest --forceExit --detectOpenHandles --coverage",
+    "test:watch": "jest --watch --forceExit",
+    "test:ci": "jest --forceExit --detectOpenHandles --coverage --coverageReporters=text-summary"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/**/*.test.js"],
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": ["server.js"],
+    "coverageThreshold": {
+      "global": {
+        "branches": 20,
+        "functions": 20,
+        "lines": 20,
+        "statements": 20
+      }
+    },
+    "testTimeout": 15000
   },
   "dependencies": {
+    "compression": "^1.7.4",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.18.2",
+    "express-async-errors": "^3.1.1",
     "express-rate-limit": "^8.3.2",
+    "express-validator": "^7.2.1",
     "firebase-admin": "^13.8.0",
+    "helmet": "^8.0.0",
     "pg": "^8.20.0",
     "razorpay": "^2.9.6",
     "socket.io": "^4.7.4",
     "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^7.1.0"
   }
 }

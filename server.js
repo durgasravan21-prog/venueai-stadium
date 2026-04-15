@@ -1,50 +1,132 @@
 /**
  * VenueAI - Smart Stadium Backend Server
  * Real-time venue management with crowd simulation, food ordering, and entry control
+ * Security: Helmet, CORS, Rate Limiting, Input Validation
+ * Efficiency: Compression, Caching, Optimized Socket Broadcasts
  */
 
-const express = require('express');
-const http = require('http');
+require('express-async-errors');
+const express    = require('express');
+const http       = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
+const cors       = require('cors');
+const helmet     = require('helmet');
+const compression = require('compression');
 const { v4: uuidv4 } = require('uuid');
+const { body, param, validationResult } = require('express-validator');
 const { initDB, syncStaff, syncOrder } = require('./db');
-const path = require('path');
+const path   = require('path');
 const crypto = require('crypto');
 const { db } = require('./firebase');
 
-// ── Razorpay config (Set these in Vercel Environment Variables) ──────────
+// ── Razorpay config ──────────────────────────────────────────────────────
 const RAZORPAY_KEY_ID     = process.env.RAZORPAY_KEY_ID     || '';
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 let Razorpay;
-try {
-  Razorpay = require('razorpay');
-} catch(e) { Razorpay = null; }
-const razorpay = (Razorpay && RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) 
-  ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET }) 
+try { Razorpay = require('razorpay'); } catch(e) { Razorpay = null; }
+const razorpay = (Razorpay && RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET)
+  ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET })
   : null;
-
 if (!razorpay) console.warn("⚠️ Razorpay: Payment gateway not configured. Transactions will be simulated.");
 
-// Pending payments (waiting for gateway success)
 const pendingPayments = {};
 
-const app = express();
+const app    = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// ── ALLOWED ORIGINS ─────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  'https://venueai-stadium.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter(Boolean);
 
-const rateLimit = require('express-rate-limit');
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10000, // Limit each IP to 10000 requests per `window`
-  standardHeaders: true,
-  legacyHeaders: false,
+const corsOptions = {
+  origin: (origin, cb) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: Origin ${origin} not allowed`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  maxAge: 86400, // Cache preflight 24h
+};
+
+const io = new Server(server, { cors: { origin: ALLOWED_ORIGINS, credentials: true } });
+
+// ── SECURITY MIDDLEWARE ──────────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'", 'https://cdn.socket.io', 'https://fonts.googleapis.com'],
+      styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
+      fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc:      ["'self'", 'data:', 'https://images.unsplash.com'],
+      connectSrc:  ["'self'", 'wss:', 'ws:', ...ALLOWED_ORIGINS],
+      frameSrc:    ["'none'"],
+      objectSrc:   ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Allow Unsplash images
+}));
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+// ── EFFICIENCY MIDDLEWARE ────────────────────────────────────────────────
+app.use(compression({ level: 6, threshold: 1024 })); // Gzip all responses > 1KB
+app.use(express.json({ limit: '50kb' }));            // Prevent payload bombs
+app.use(express.urlencoded({ extended: false, limit: '50kb' }));
+
+// Static files with caching
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1h',
+  etag: true,
+  lastModified: true,
+}));
+
+// ── RATE LIMITING (Tiered) ───────────────────────────────────────────────
+const rateLimit    = require('express-rate-limit');
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 500,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
 });
-app.use(limiter);
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 60, // 60 req/min per IP for API
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'API rate limit exceeded.' },
+});
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 5, // Only 5 payment attempts/min
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Payment rate limit exceeded. Please wait.' },
+});
+app.use(globalLimiter);
+app.use('/api/', apiLimiter);
+app.use('/api/payment', paymentLimiter);
+
+// ── INPUT VALIDATION MIDDLEWARE ──────────────────────────────────────────
+const sanitizeString = (str) => {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[<>"'`]/g, '').trim().slice(0, 500);
+};
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({ success: false, errors: errors.array() });
+  }
+  next();
+};
+
+// ── GLOBAL ERROR HANDLER ─────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error('[VenueAI Error]', err.message);
+  if (err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ error: 'Forbidden: CORS policy violation' });
+  }
+  res.status(err.status || 500).json({ error: 'Internal server error', message: err.message || 'Unknown error' });
+});
 
 // ============================================================
 // DATA MODELS & SIMULATION ENGINE
