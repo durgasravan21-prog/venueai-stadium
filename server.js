@@ -59,16 +59,18 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'", 'https://cdn.socket.io', 'https://fonts.googleapis.com'],
-      styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
-      fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:      ["'self'", 'data:', 'https://images.unsplash.com'],
-      connectSrc:  ["'self'", 'wss:', 'ws:', ...ALLOWED_ORIGINS],
-      frameSrc:    ["'none'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.socket.io', 'https://cdnjs.cloudflare.com', 'https://checkout.razorpay.com'],
+      styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
+      fontSrc:     ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc:      ["'self'", 'data:', 'blob:', 'https://images.unsplash.com', 'https://*.unsplash.com'],
+      connectSrc:  ["'self'", 'wss:', 'ws:', 'https:', 'http:'],
+      frameSrc:    ["'self'", 'https://checkout.razorpay.com'],
       objectSrc:   ["'none'"],
+      workerSrc:   ["'self'", 'blob:'],
     },
   },
-  crossOriginEmbedderPolicy: false, // Allow Unsplash images
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
@@ -119,14 +121,7 @@ const validate = (req, res, next) => {
   next();
 };
 
-// ── GLOBAL ERROR HANDLER ─────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-  console.error('[VenueAI Error]', err.message);
-  if (err.message && err.message.includes('CORS')) {
-    return res.status(403).json({ error: 'Forbidden: CORS policy violation' });
-  }
-  res.status(err.status || 500).json({ error: 'Internal server error', message: err.message || 'Unknown error' });
-});
+// NOTE: Global error handler is registered AFTER all routes (see bottom of file)
 
 // ============================================================
 // DATA MODELS & SIMULATION ENGINE
@@ -1506,6 +1501,20 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
   });
+});
+
+// ── 404 Handler for API routes (must be after all routes) ───────────────
+app.use('/api', (req, res) => {
+  res.status(404).json({ success: false, error: 'API endpoint not found' });
+});
+
+// ── GLOBAL ERROR HANDLER (must be last, 4-arg signature) ─────────────────
+app.use((err, req, res, next) => {
+  console.error('[VenueAI Error]', err.message);
+  if (err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ error: 'Forbidden: CORS policy violation' });
+  }
+  res.status(err.status || 500).json({ error: 'Internal server error' });
 });
 
 // ============================================================
