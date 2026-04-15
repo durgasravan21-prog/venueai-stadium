@@ -58,9 +58,9 @@
 
   <!-- ══ STADIUM SELECTOR ══ -->
     <div class="overlay-content">
-      <div class="logo" aria-hidden="true">
-        <img src="/assets/logo.png" alt="VenueAI" style="height:32px;vertical-align:middle;margin-right:10px;" onerror="this.style.display='none'">
-        VenueAI <span class="gradient-text">World</span>
+      <div class="logo-container">
+        <img src="/assets/logo.png" alt="" class="brand-logo" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=VA&backgroundColor=c9973a'">
+        <span class="brand-name">VenueAI <span class="gradient-text">World</span></span>
       </div>
       <h1 id="selectorTitle">Select Your Stadium</h1>
       <p>Enter the venue name or select from active grounds</p>
@@ -70,8 +70,8 @@
       </div>
 
       <div class="custom-entry">
-        <label for="stadiumSelectDropdown" style="font-size:0.75rem;color:rgba(255,255,255,0.6);display:block;margin-bottom:8px;">
-          Quick Select Stadium
+        <label for="stadiumSelectDropdown" style="font-size:0.9rem; color:var(--text-secondary); display:block; margin-bottom:12px; font-weight:700;">
+          Select via Search or Dropdown:
         </label>
         <select id="stadiumSelectDropdown" class="stadium-dropdown-select"
                 aria-label="Select a stadium from the dropdown"
