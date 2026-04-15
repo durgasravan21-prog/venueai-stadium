@@ -61,12 +61,13 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.socket.io', 'https://cdnjs.cloudflare.com', 'https://checkout.razorpay.com'],
+      scriptSrc:   ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.socket.io', 'https://cdnjs.cloudflare.com', 'https://checkout.razorpay.com', 'https://maps.googleapis.com', 'https://accounts.google.com', 'https://www.gstatic.com'],
+      scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
       fontSrc:     ["'self'", 'https://fonts.gstatic.com', 'data:'],
       imgSrc:      ["'self'", 'data:', 'blob:', 'https://images.unsplash.com', 'https://*.unsplash.com'],
-      connectSrc:  ["'self'", 'wss:', 'ws:', 'https:', 'http:', 'https://*.firebaseio.com', 'https://*.googleapis.com'],
-      frameSrc:    ["'self'", 'https://checkout.razorpay.com'],
+      connectSrc:  ["'self'", 'wss:', 'ws:', 'https:', 'http:', 'https://*.firebaseio.com', 'https://*.googleapis.com', 'https://accounts.google.com', 'https://www.gstatic.com'],
+      frameSrc:    ["'self'", 'https://checkout.razorpay.com', 'https://accounts.google.com'],
       objectSrc:   ["'none'"],
       workerSrc:   ["'self'", 'blob:'],
     },
