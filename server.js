@@ -418,7 +418,9 @@ async function loadStadiumData() {
 
 // Initialize persistence
 loadStadiumData();
-setInterval(saveStadiumData, 60000); // Save every 60 seconds
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(saveStadiumData, 60000); // Save every 60 seconds
+}
 
 /**
  * World Agent Logic (Multi-Stadium Support)
@@ -733,9 +735,11 @@ function runSimulation() {
   processOrders();
 }
 
-// Start periods
-setInterval(runSimulation, 2000);
-setInterval(runWorldAgent, 3000);
+// Start simulation periods (disabled in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(runSimulation, 2000);
+  setInterval(runWorldAgent, 3000);
+}
 
 // ============================================================
 // REST API ROUTES
@@ -1509,49 +1513,49 @@ io.on('connection', (socket) => {
 // ============================================================
 
 const PORT = process.env.PORT || 3000;
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
   server.listen(PORT, () => {
     console.log(`\n🏟️  VenueAI Multi-Stadium Server running at http://localhost:${PORT}`);
   });
 }
 
-// ─── INITIALIZE AGENTS ──────────────────────────────────────────────
+// ─── INITIALIZE AGENTS (Disabled in test env to prevent open handles) ───────
 refreshDailySchedule(); // Select today's matches
 applyRealitySync();     // Initial sync
 
-setInterval(refreshDailySchedule, 3600000); // Check once an hour for date change
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(refreshDailySchedule, 3600000); // Check once an hour for date change
 
-// REAL-TIME DYNAMIC AGENT (Mimies Google Fetching every 15s)
-setInterval(() => {
-  // 1. Simluate changing scores in the Reality Feed
-  Object.keys(GOOGLE_REALITY_FEED).forEach(sid => {
-    const live = GOOGLE_REALITY_FEED[sid];
-    if (live.status === 'second_half' || live.status === 'first_half') {
-      // Chance to score runs or lose wicket every 15s
-      const roll = Math.random();
-      if (roll > 0.8) live.homeScore += Math.floor(Math.random() * 4 + 1);
-      if (roll > 0.85) live.awayScore += Math.floor(Math.random() * 4 + 1);
-      if (roll > 0.95) {
-        if (live.battingTeam === 'home') live.homeWickets = Math.min(10, live.homeWickets + 1);
-        else live.awayWickets = Math.min(10, live.awayWickets + 1);
+  // REAL-TIME DYNAMIC AGENT (Mimics Google Fetching every 15s)
+  setInterval(() => {
+    // 1. Simulate changing scores in the Reality Feed
+    Object.keys(GOOGLE_REALITY_FEED).forEach(sid => {
+      const live = GOOGLE_REALITY_FEED[sid];
+      if (live.status === 'second_half' || live.status === 'first_half') {
+        const roll = Math.random();
+        if (roll > 0.8) live.homeScore += Math.floor(Math.random() * 4 + 1);
+        if (roll > 0.85) live.awayScore += Math.floor(Math.random() * 4 + 1);
+        if (roll > 0.95) {
+          if (live.battingTeam === 'home') live.homeWickets = Math.min(10, live.homeWickets + 1);
+          else live.awayWickets = Math.min(10, live.awayWickets + 1);
+        }
+        live.minute = (live.minute || 0) + (Math.random() > 0.5 ? 1 : 0);
       }
-      live.minute = (live.minute || 0) + (Math.random() > 0.5 ? 1 : 0);
-    }
-  });
+    });
 
-  // 2. Sync to active stadium states
-  applyRealitySync();
+    // 2. Sync to active stadium states
+    applyRealitySync();
 
-  // 3. Minor simulation updates for all stadiums (Crowd etc)
-  Object.keys(stadiumStates).forEach(sid => {
-    const s = stadiumStates[sid];
-    s.attendance = Math.floor(Math.random() * 2000 + 48000);
-    // Push updates
-    io.to(`stadium_${sid}`).emit('match_update', s);
-  });
-  
-  console.log("📡 AI Reality Agent: Fetched & Pulsed latest IPL scores (15s cycle).");
-}, 15000);
+    // 3. Minor simulation updates for all stadiums (Crowd etc)
+    Object.keys(stadiumStates).forEach(sid => {
+      const s = stadiumStates[sid];
+      s.attendance = Math.floor(Math.random() * 2000 + 48000);
+      io.to(`stadium_${sid}`).emit('match_update', s);
+    });
 
-// Export for Vercel
+    console.log("📡 AI Reality Agent: Fetched & Pulsed latest IPL scores (15s cycle).");
+  }, 15000);
+}
+
+// Export for Vercel & Jest
 module.exports = app;
