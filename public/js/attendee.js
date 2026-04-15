@@ -42,7 +42,7 @@ setInterval(async () => {
     if (result.success && result.data.state) {
       updateMatchUI(result.data.state);
       // Also update venue if needed
-      currentVenueData = result.data.venue;
+      venueState = result.data.venue;
     }
   } catch (err) {
     console.warn("Reality Sync: Polling fallback failed.", err);
@@ -150,15 +150,25 @@ function tickETAs() {
 
 // ── Socket events ─────────────────────────────────────────────
 socket.on('venue_update', data => {
+  if (!data) return;
   venueState = data;
-  const att = data.totalAttendance.toLocaleString('en-IN');
+  
+  // Defensive checks for all numerical fields to prevent crashes
+  const att = (data.totalAttendance || 0).toLocaleString('en-IN');
   setText('liveAttendance', att);
-  const avgWait = (data.concessions.reduce((a,c) => a + c.queue_time, 0) / data.concessions.length).toFixed(1);
+  
+  const concessions = data.concessions || [];
+  const avgWait = concessions.length 
+    ? (concessions.reduce((a,c) => a + (c.queue_time || 0), 0) / concessions.length).toFixed(1)
+    : '0.0';
   setText('liveWait', avgWait + ' min');
-  const best = [...data.gates].sort((a,b) => a.queue_length - b.queue_length)[0];
-  if (best) setText('bestGate', 'Gate ' + best.id);
+  
+  const gates = data.gates || [];
+  const best = [...gates].sort((a,b) => (a.queue_length || 0) - (b.queue_length || 0))[0];
+  if (best) setText('bestGate', 'Gate ' + (best.id || 'A'));
+  
   renderZoneCards(data);
-  renderGateStatus(data.gates);
+  renderGateStatus(gates);
 });
 
 // ─── Fetch Match State ────────────────────────────────────────
@@ -226,8 +236,8 @@ function updateMatchUI(data) {
     if (awayWrap) awayWrap.style.display = 'none';
   }
 
-  setText('matchStatus', data.status.replace(/_/g,' ').toUpperCase());
-  setText('matchMinute', data.minute > 0 ? data.minute + "'" : '');
+  setText('matchStatus', (data.status || 'pre_match').replace(/_/g,' ').toUpperCase());
+  setText('matchMinute', (data.minute || 0) > 0 ? data.minute + "'" : '');
 
   // Toss Update
   const tossEl = document.getElementById('matchToss');
@@ -316,31 +326,43 @@ socket.on('order_update', updated => {
 
 socket.on('menu_update', updated => { fullMenu = updated; renderMenu(); });
 
-// ── Tab nav (Accessible) ─────────────────────────────────────
 function switchTab(id) {
+  // Update UI Panels
   document.querySelectorAll('.tab-panel').forEach(p => {
     p.classList.remove('active');
     p.setAttribute('hidden', '');
   });
+  
+  // Update Nav Buttons
   document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.remove('active');
     b.setAttribute('aria-selected', 'false');
     b.setAttribute('tabindex', '-1');
+    b.removeAttribute('aria-current');
   });
+
   const panel = document.getElementById(`tab-${id}`);
   const btn   = document.querySelector(`[data-tab="${id}"]`);
+
   if (panel) {
     panel.classList.add('active');
     panel.removeAttribute('hidden');
-    panel.focus({ preventScroll: true });
+    panel.focus({ preventScroll: true }); 
   }
   if (btn) {
     btn.classList.add('active');
     btn.setAttribute('aria-selected', 'true');
+    btn.setAttribute('aria-current', 'page');
     btn.setAttribute('tabindex', '0');
   }
+
   currentTab = id;
-  announce(`Switched to ${id} tab`);
+  if (id === 'food') renderMenu();
+  
+  // Screen reader announcement
+  const announcer = document.getElementById('live-announcer');
+  if (announcer) announcer.textContent = `Tab switched to ${id}`;
+  
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -359,7 +381,7 @@ function renderCCTVs(cctvs) {
   grid.innerHTML = cctvs.map(cam => `
     <div class="ai-cctv-card">
       <div class="ai-cctv-video">
-        <img src="${cam.feed}" style="width:100%;height:100%;object-fit:cover;opacity:0.8">
+        <img src="${cam.feed}" loading="lazy" style="width:100%;height:100%;object-fit:cover;opacity:0.8" alt="Live feed from ${cam.name}">
         <div class="ai-bbox" style="top:${20 + Math.random()*40}%;left:${10 + Math.random()*60}%"></div>
         <div class="ai-overlay-badge"><span style="color:#10b981">●</span> ${cam.status.toUpperCase()} | AI SECURE</div>
       </div>
@@ -538,12 +560,18 @@ function renderMenu() {
   if (!items.length) { grid.innerHTML = `<div class="slot-error">No items in this category</div>`; return; }
   grid.innerHTML = items.map(item => {
     const avail = item.available !== false;
+    const nameEsc = item.name.replace(/'/g,"\\'");
     return `
-      <div class="menu-card ${avail ? '' : 'unavailable'}" onclick="${avail ? `addToCart('${item.id}','${item.name.replace(/'/g,"\\'")}',${item.price},'${item.image||'🍽️'}')` : ''}">
-        <div class="menu-emoji">${item.image || '🍽️'}</div>
+      <div class="menu-card ${avail ? '' : 'unavailable'}" 
+           role="button" 
+           tabindex="${avail ? '0' : '-1'}"
+           aria-label="${avail ? `Add ${item.name} for ₹${item.price} to cart` : `${item.name} is currently unavailable`}"
+           onclick="${avail ? `addToCart('${item.id}','${nameEsc}',${item.price},'${item.image||'🍽️'}')` : ''}"
+           onkeypress="${avail ? `if(event.key==='Enter')addToCart('${item.id}','${nameEsc}',${item.price},'${item.image||'🍽️'}')` : ''}">
+        <div class="menu-emoji" aria-hidden="true">${item.image || '🍽️'}</div>
         <div class="menu-name">${item.name}</div>
-        <div class="menu-price">${avail ? '₹'+item.price : '⛔ Unavailable'}</div>
-        ${avail ? `<div class="menu-add-btn">+ Add</div>` : ''}
+        <div class="menu-price" role="text">${avail ? '₹'+item.price : '⛔ Unavailable'}</div>
+        ${avail ? `<div class="menu-add-btn" aria-hidden="true">+ Add</div>` : ''}
       </div>`;
   }).join('');
 }
@@ -580,7 +608,9 @@ function renderCart() {
       <div class="cart-row">
         <span>${item.image} ${item.name} × ${item.qty}</span>
         <span>₹${(item.price * item.qty).toLocaleString('en-IN')}</span>
-        <button onclick="removeFromCart('${item.id}')" class="cart-remove">✕</button>
+        <button onclick="removeFromCart('${item.id}')" 
+                class="cart-remove" 
+                aria-label="Remove ${item.name} from cart">✕</button>
       </div>`).join('');
   }
 }
@@ -716,7 +746,7 @@ async function getRoute() {
       <div class="route-card best">
         <div class="route-best-badge">⭐ Best Route</div>
         <div class="route-steps">
-          ${r.path.map((s,i) => `<div class="route-step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join('<div class="step-connector"></div>')}
+          ${(r.path || r.steps || []).map((s,i) => `<div class="route-step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join('<div class="step-connector"></div>')}
         </div>
         <div class="route-meta">
           <span>📏 ${r.distance}</span>
@@ -724,7 +754,7 @@ async function getRoute() {
           <span style="color:${col}">● ${r.congestion.toUpperCase()}</span>
         </div>
       </div>
-      ${alts.map(a => `
+      ${(alts || []).map(a => `
         <div class="route-card alt">
           <div style="font-weight:800;margin-bottom:6px">${a.label || 'Alternative Route'}</div>
           <div style="font-size:0.82rem;color:var(--text-secondary)">${a.path.join(' → ')}</div>

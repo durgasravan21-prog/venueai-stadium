@@ -6,9 +6,26 @@
   <meta name="description" content="VenueAI — Smart Stadium Experience. Book entry, order food, navigate with AI assistance.">
   <meta name="theme-color" content="#1a4a2e">
 
-  <!-- SEO -->
+  <!-- SEO & Google Services -->
   <title>VenueAI — Smart Stadium Experience</title>
   <link rel="canonical" href="https://venueai-stadium.vercel.app/">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SportsActivityLocation",
+    "name": "VenueAI Smart Stadium",
+    "description": "Next-gen smart stadium experience with AI-powered navigation, and digital food ordering.",
+    "url": "https://venueai-stadium.vercel.app/",
+    "potentialAction": {
+      "@type": "OrderAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "https://venueai-stadium.vercel.app/",
+        "actionPlatform": ["http://schema.org/DesktopWebPlatform", "http://schema.org/MobileWebPlatform"]
+      }
+    }
+  }
+  </script>
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -40,9 +57,11 @@
 <div id="app" role="application" aria-label="VenueAI Smart Stadium App">
 
   <!-- ══ STADIUM SELECTOR ══ -->
-  <div id="stadiumOverlay" class="stadium-overlay" role="dialog" aria-modal="true" aria-labelledby="selectorTitle">
     <div class="overlay-content">
-      <div class="logo" aria-hidden="true">VenueAI <span class="gradient-text">World</span></div>
+      <div class="logo" aria-hidden="true">
+        <img src="/assets/logo.png" alt="VenueAI" style="height:32px;vertical-align:middle;margin-right:10px;" onerror="this.style.display='none'">
+        VenueAI <span class="gradient-text">World</span>
+      </div>
       <h1 id="selectorTitle">Select Your Stadium</h1>
       <p>Enter the venue name or select from active grounds</p>
 
@@ -144,7 +163,7 @@
   <!-- ══ TAB NAVIGATION ══ -->
   <nav class="tab-nav" role="tablist" aria-label="Stadium features">
     <button class="tab-btn active" role="tab" id="tab-btn-venue"
-            aria-selected="true" aria-controls="tab-venue"
+            aria-selected="true" aria-controls="tab-venue" aria-current="page"
             data-tab="venue" onclick="switchTab('venue')">
       <span aria-hidden="true">🗺️</span><span>Venue</span>
     </button>

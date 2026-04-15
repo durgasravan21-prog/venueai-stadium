@@ -25,6 +25,7 @@ try {
   
   if (admin.apps.length > 0) {
     db = admin.firestore();
+    db.settings({ ignoreUndefinedProperties: true });
     console.log("✅ Firebase Admin SDK Initialized");
   }
 } catch (error) {
