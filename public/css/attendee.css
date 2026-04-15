@@ -323,7 +323,7 @@ body {
 .cart-body { display:none; margin-top:14px; }
 .cart-item { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px dashed rgba(139,94,60,0.3); color:var(--text-primary); font-size:0.9rem; }
 .cart-seat { margin:12px 0; }
-.cart-seat label { font-size:0.8rem; color:var(--text-secondary); display:block; margin-bottom:5px; font-weight:700; }
+.cart-seat label { font-size:0.9rem; color: #8b7355; display:block; margin-bottom:12px; font-weight:700; }
 .cart-seat input { width:100%; padding:11px 14px; background:rgba(26,15,7,0.9); border:1px solid var(--leather-tan); border-radius:var(--radius-sm); color:var(--leather-cream); font-size:0.9rem; font-family:'Nunito',sans-serif; box-shadow:var(--shadow-inset); }
 
 /* NAVIGATE */
@@ -419,11 +419,11 @@ toast-container { position:fixed; bottom:80px; left:50%; transform:translateX(-5
 .stadium-dropdown-select {
   width: 100%;
   padding: 16px 45px 16px 20px;
-  background-color: rgba(0,0,0,0.5);
+  background-color: #2d1a0e;
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(245,230,200,0.2);
+  border: 1px solid rgba(139,94,60,0.4);
   border-radius: 16px;
-  color: var(--leather-cream);
+  color: #f5e6c8;
   font-size: 1rem;
   font-weight: 700;
   outline: none;
@@ -435,16 +435,16 @@ toast-container { position:fixed; bottom:80px; left:50%; transform:translateX(-5
   background-position: calc(100% - 15px) center;
   background-size: 18px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.4);
 }
 .stadium-dropdown-select:hover {
-  border-color: var(--amber);
-  background-color: rgba(0,0,0,0.6);
+  border-color: #8b5e3c;
+  background-color: #3d2010;
   transform: translateY(-1px);
 }
 .stadium-dropdown-select:focus {
-  border-color: var(--amber);
-  box-shadow: 0 0 0 3px rgba(245,158,11,0.2);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.2), inset 0 2px 4px rgba(0,0,0,0.5);
 }
 .stadium-dropdown-select option {
   background: #2d1a0e;

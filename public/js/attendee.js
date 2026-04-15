@@ -56,10 +56,39 @@ socket.on('connect', () => {
 
 // ── Boot ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  if (currentStadiumId) {
-    enterStadium(currentStadiumId);
+  // Initial state check
+  const loggedInUser = sessionStorage.getItem('venue_user');
+  if (loggedInUser) {
+    document.getElementById('authOverlay').style.display = 'none';
+    if (currentStadiumId) {
+      enterStadium(currentStadiumId);
+    } else {
+      document.getElementById('stadiumSelectorOverlay').style.display = 'flex';
+      loadStadiums();
+    }
   } else {
-    loadStadiums();
+    document.getElementById('authOverlay').style.display = 'flex';
+    document.getElementById('stadiumSelectorOverlay').style.display = 'none';
+  }
+
+  // Auth Button Listener
+  const authBtn = document.getElementById('googleLoginBtn');
+  if (authBtn) {
+    authBtn.addEventListener('click', () => {
+      // Simulation of Google Login for now, or use Firebase Client if keys provided
+      console.log("🔑 Google Login Triggered...");
+      const dummyUser = { name: 'Attendee', email: 'user@example.com' };
+      sessionStorage.setItem('venue_user', JSON.stringify(dummyUser));
+      
+      // Transition to selector
+      document.getElementById('authOverlay').style.transition = 'opacity 0.5s';
+      document.getElementById('authOverlay').style.opacity = '0';
+      setTimeout(() => {
+        document.getElementById('authOverlay').style.display = 'none';
+        document.getElementById('stadiumSelectorOverlay').style.display = 'flex';
+        loadStadiums();
+      }, 500);
+    });
   }
   
   fetchMenu();
@@ -115,10 +144,13 @@ function enterStadium(sid) {
   socket.emit('join_stadium', sid);
   
   // UI Transition
-  const overlay = document.getElementById('stadiumOverlay');
-  if (overlay) overlay.style.display = 'none';
+  const authOverlay = document.getElementById('authOverlay');
+  const selectorOverlay = document.getElementById('stadiumSelectorOverlay');
   const hero = document.getElementById('mainHero');
-  if (hero) hero.style.display = 'block';
+
+  if (authOverlay) authOverlay.style.display = 'none';
+  if (selectorOverlay) selectorOverlay.style.display = 'none';
+  if (hero) hero.style.display = 'flex'; // Hero uses flex for centering
 
   // REST Fallback for immediate data
   fetch(`/api/match?stadiumId=${sid}`)

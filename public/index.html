@@ -56,7 +56,31 @@
 
 <div id="app" role="application" aria-label="VenueAI Smart Stadium App">
 
+  <!-- ══ GOOGLE AUTH GATEWAY ══ -->
+  <div id="authOverlay" class="stadium-overlay">
+    <div class="overlay-content">
+      <div class="logo-container">
+        <img src="/assets/logo.png" alt="" class="brand-logo">
+        <span class="brand-name">VenueAI <span class="gradient-text">World</span></span>
+      </div>
+      <h2>Welcome Back</h2>
+      <p>Please sign in to access your digital stadium experience</p>
+      
+      <div class="auth-box">
+        <button id="googleLoginBtn" class="btn btn-secondary btn-full" style="background:#fff; color:#000; font-size:1rem; gap:12px; margin-top:24px;">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="" style="width:18px;">
+          Sign in with Google
+        </button>
+      </div>
+      
+      <p style="font-size:0.7rem; color:var(--text-muted); margin-top:20px;">
+        By signing in, you agree to our Terms of Service & Privacy Policy.
+      </p>
+    </div>
+  </div>
+
   <!-- ══ STADIUM SELECTOR ══ -->
+  <div id="stadiumSelectorOverlay" class="stadium-overlay" style="display:none;">
     <div class="overlay-content">
       <div class="logo-container">
         <img src="/assets/logo.png" alt="" class="brand-logo" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=VA&backgroundColor=c9973a'">
@@ -70,7 +94,7 @@
       </div>
 
       <div class="custom-entry">
-        <label for="stadiumSelectDropdown" style="font-size:0.9rem; color:var(--text-secondary); display:block; margin-bottom:12px; font-weight:700;">
+        <label for="stadiumSelectDropdown" style="font-size:0.9rem; color:#8b7355; display:block; margin-bottom:12px; font-weight:700;">
           Select via Search or Dropdown:
         </label>
         <select id="stadiumSelectDropdown" class="stadium-dropdown-select"
