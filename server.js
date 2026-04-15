@@ -495,18 +495,19 @@ function runWorldAgent() {
     matchState.weather.temp = 28 + Math.floor(Math.random() * 10);
     matchState.weather.humidity = 40 + Math.floor(Math.random() * 20);
 
-    // IF GOOGLE SYNC IS ON for THIS stadium (or if it's the primary Hyderabad match)
-    if (sid === 'hyderabad_stadium' || sid === GOOGLE_REALITY_FEED.stadium) {
-      matchState.homeTeam = GOOGLE_REALITY_FEED.homeTeam;
-      matchState.awayTeam = GOOGLE_REALITY_FEED.awayTeam;
-      matchState.homeScore = GOOGLE_REALITY_FEED.homeScore;
-      matchState.homeWickets = GOOGLE_REALITY_FEED.homeWickets;
-      matchState.awayScore = GOOGLE_REALITY_FEED.awayScore;
-      matchState.awayWickets = GOOGLE_REALITY_FEED.awayWickets;
-      matchState.target = GOOGLE_REALITY_FEED.target;
-      matchState.status = GOOGLE_REALITY_FEED.status;
-      matchState.stadiumName = GOOGLE_REALITY_FEED.stadiumName;
-      matchState.sport = GOOGLE_REALITY_FEED.sport;
+    // IF GOOGLE SYNC IS ON for THIS stadium
+    if (GOOGLE_REALITY_FEED[sid]) {
+      const live = GOOGLE_REALITY_FEED[sid];
+      matchState.homeTeam = live.homeTeam;
+      matchState.awayTeam = live.awayTeam;
+      matchState.homeScore = live.homeScore;
+      matchState.homeWickets = live.homeWickets;
+      matchState.awayScore = live.awayScore;
+      matchState.awayWickets = live.awayWickets;
+      matchState.target = live.target;
+      matchState.status = live.status;
+      matchState.stadiumName = live.stadiumName;
+      matchState.sport = live.sport || matchState.sport;
     } else {
       // Auto-simulate if no real feed
       simulateMatch(sid);
