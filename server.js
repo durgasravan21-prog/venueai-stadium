@@ -1681,7 +1681,6 @@ if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'production') {
 
     console.log("📡 AI Reality Agent: Fetched & Pulsed latest IPL scores (15s cycle).");
   }, 15000);
-}
 
 // Export for Vercel & Jest
 module.exports = app;
