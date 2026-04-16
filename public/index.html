@@ -76,7 +76,8 @@
         .catch((error) => {
           console.error("Google Auth Error:", error);
           if(btn) { btn.innerHTML = '❌ Auth Failed - Try Again'; btn.disabled = false; }
-          alert("Authentication Failed. Please ensure your Google Account is authorized and try again.");
+          // Show the specific error code to help identify if it's an unauthorized domain or disabled provider
+          alert("Authentication Failed (" + (error.code || 'Unknown Error') + ").\n\nSuggestion: Ensure 'venueai-stadium.vercel.app' is added to 'Authorized Domains' in your Firebase Auth settings.");
         });
     };
   </script>
