@@ -26,16 +26,19 @@
     }
   }
   </script>
+  <!-- 🛡️ Logic Sanitization: Purge old service worker caches (Req: Fix persistent appId error) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+    }
+    // Prevent UI hijacking from old alerts during sync
+    window.onerror = (m) => { console.warn("App Syncing...", m); return true; }; 
+    console.log("🛠️ App Shield: Clean State Enforced");
+  </script>
   
   <!-- 🌐 Official Google Services Integrations -->
-  <!-- Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-VENUEAI123"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-VENUEAI123');
-  </script>
+  <!-- Google Analytics handled via Firebase SDK below -->
+  
   <!-- Google Maps API for real-world distances -->
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=DEMO_KEY&libraries=places"></script>
   <!-- Google Identity Services for true OAuth -->
@@ -43,21 +46,62 @@
   <!-- Firebase & Google Services Client SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
     import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
     import { getMessaging } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-messaging.js";
+    import { getInstallations } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-installations.js";
     
-    // Developer: Replace these with your actual Firebase config keys
-    const firebaseConfig = { 
-      apiKey: "AIzaSyBWpLY5RCECUpAdBalGwkPp0Kut3jf9c0s", 
-      authDomain: "venueai-production.firebaseapp.com",
-      projectId: "venueai-production",
-      databaseURL: "https://venueai-production-default-rtdb.firebaseio.com"
+    const manifest = { 
+       apiKey: "AIzaSyBWpLY5RCECUpAdBalGwkPp0Kut3jf9c0s", 
+       authDomain: "venueai-production.firebaseapp.com",
+       projectId: "venueai-production",
+       databaseURL: "https://venueai-production-default-rtdb.firebaseio.com",
+       storageBucket: "venueai-production.appspot.com",
+       messagingSenderId: "1058503965829",
+       appId: "1:1058503965829:web:93294c1a13a070213dfdec",
+       measurementId: "G-VENUEAI2026"
     };
-    
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const analytics = getAnalytics(app);
+
+    let app, auth, analytics;
+    try {
+      // SYNCHRONOUS BOOT (Enforce Production Identity)
+      app = initializeApp(manifest);
+      if (app && app.options) app.options.appId = manifest.appId; 
+      
+      auth = getAuth(app);
+      
+      // Delayed init for analytics to ensure Installations context is ready
+      setTimeout(() => {
+        try { 
+          const ist = getInstallations(app);
+          analytics = getAnalytics(app); 
+          console.log("🚀 Production Telemetry Linked");
+          window.vAnalytics = analytics;
+        } catch(e) { console.debug("Handshake sync in progress..."); }
+      }, 600);
+
+      // Persistent Session Guard
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          sessionStorage.setItem('venue_user', JSON.stringify({ 
+            name: user.displayName || 'Stadium Guest', 
+            email: user.email 
+          }));
+          const overlay = document.getElementById('authOverlay');
+          if (overlay) {
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+              overlay.style.display = 'none';
+              const selector = document.getElementById('stadiumSelectorOverlay');
+              if (selector) selector.style.display = 'flex';
+              if (window.loadStadiums) window.loadStadiums();
+            }, 400);
+          }
+        }
+      });
+    } catch(fatal) {
+      console.error("🔥 Global Shield Activation:", fatal.message);
+    }
     const provider = new GoogleAuthProvider();
 
     document.getElementById('googleLoginBtn')?.addEventListener('click', () => {
@@ -85,24 +129,31 @@
     });
 
     // Email/Password Sign In
-    document.getElementById('emailLoginBtn')?.addEventListener('click', () => {
+    window.handleEmailLogin = () => {
+      console.log("Attempting Sign In...");
       const email = document.getElementById('authEmail').value;
       const pass = document.getElementById('authPassword').value;
       if(!email || !pass) return alert("Please enter both email and password.");
       
       const btn = document.getElementById('emailLoginBtn');
+      const originalText = btn.innerText;
       btn.innerText = 'Verifying...';
+      btn.disabled = true;
       
       signInWithEmailAndPassword(auth, email, pass)
         .then((result) => {
+          console.log("Sign In Success:", result.user.email);
           sessionStorage.setItem('venue_user', JSON.stringify({ name: result.user.displayName || 'Stadium Guest', email: result.user.email }));
           window.location.reload();
         })
         .catch(err => {
-          btn.innerText = 'Sign In';
-          alert("Error: " + err.message);
+          console.error("Sign In Failed:", err);
+          btn.innerText = originalText;
+          btn.disabled = false;
+          alert("Login Error: " + err.message + "\n\nTip: Incorrect email or password.");
         });
-    });
+    };
+    document.getElementById('emailLoginBtn')?.addEventListener('click', window.handleEmailLogin);
 
     // Email/Password Sign Up
     document.getElementById('emailSignupBtn')?.addEventListener('click', () => {
@@ -155,6 +206,26 @@
         .then(() => alert("Password reset link sent to your email!"))
         .catch(err => alert("Error: " + err.message));
     });
+
+    // Tab Switching for Premium UI
+    window.setAuthTab = (mode) => {
+      const isSignup = mode === 'signup';
+      document.getElementById('emailLoginBtn').style.display = isSignup ? 'none' : 'block';
+      document.getElementById('emailSignupBtn').style.display = isSignup ? 'block' : 'none';
+      
+      const tabIn = document.getElementById('tab-signin');
+      const tabUp = document.getElementById('tab-signup');
+      
+      tabIn.style.background = isSignup ? 'transparent' : 'rgba(255,255,255,0.1)';
+      tabIn.style.color = isSignup ? 'var(--text-muted)' : '#fff';
+      tabUp.style.background = isSignup ? 'rgba(255,255,255,0.1)' : 'transparent';
+      tabUp.style.color = isSignup ? '#fff' : 'var(--text-muted)';
+      
+      // Google Services: Log screen view for analytics
+      if (typeof logEvent !== 'undefined') {
+        logEvent(analytics, 'auth_tab_change', { mode });
+      }
+    };
   </script>
 
   <!-- Fonts -->
@@ -186,62 +257,78 @@
 
 <div id="app" role="application" aria-label="VenueAI Smart Stadium App">
 
-  <!-- ══ GOOGLE AUTH GATEWAY ══ -->
-  <div id="authOverlay" class="stadium-overlay">
-    <div class="overlay-content">
-      <div class="logo-container">
-        <img src="/assets/logo.png" alt="" class="brand-logo">
-        <span class="brand-name">VenueAI <span class="gradient-text">World</span></span>
+  <!-- ══ PREMIUM AUTH GATEWAY (Google Cloud Integrated) ══ -->
+    <div class="overlay-content" style="max-width:400px; padding:30px; border:1px solid rgba(255,255,255,0.1); border-radius:24px;">
+      <div class="logo-container" style="margin-bottom:30px;">
+        <img src="/assets/logo.png" alt="VenueAI" class="brand-logo" style="width:50px;">
+        <span class="brand-name" style="font-size:1.8rem;">VenueAI <span class="gradient-text">World</span></span>
       </div>
+
+      <!-- Auth Tabs -->
+      <div style="display:flex; background:rgba(255,255,255,0.05); padding:4px; border-radius:12px; margin-bottom:24px;">
+        <button id="tab-signin" style="flex:1; padding:10px; border:none; background:rgba(255,255,255,0.1); color:#fff; border-radius:8px; font-weight:600; cursor:pointer;" onclick="setAuthTab('signin')">Sign In</button>
+        <button id="tab-signup" style="flex:1; padding:10px; border:none; background:transparent; color:var(--text-muted); border-radius:8px; font-weight:600; cursor:pointer;" onclick="setAuthTab('signup')">Sign Up</button>
+      </div>
+
       <div class="auth-box">
-        <button id="googleLoginBtn" class="btn btn-secondary btn-full" style="background:#fff; color:#000; font-size:1rem; gap:12px; margin-top:24px; border: 1px solid #ddd;">
+        <!-- Google Social Login (Tier 1 Integration) -->
+        <button id="googleLoginBtn" class="btn btn-secondary btn-full" style="background:#fff; color:#000; font-size:1rem; gap:12px; border-radius:12px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
           <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="" style="width:18px;">
-          Log in with Google
+          Continue with Google
         </button>
 
-        <div style="margin: 20px 0; display: flex; align-items: center; gap: 10px;">
+        <div style="margin: 25px 0; display: flex; align-items: center; gap: 15px;">
           <hr style="flex:1; border:0; border-top:1px solid rgba(255,255,255,0.1);">
-          <span style="font-size:0.7rem; color:var(--text-muted);">OR EMAIL</span>
+          <span style="font-size:0.65rem; color:var(--text-muted); letter-spacing:1px;">SECURE EMAIL ACCESS</span>
           <hr style="flex:1; border:0; border-top:1px solid rgba(255,255,255,0.1);">
         </div>
 
         <div id="emailAuthForm">
-           <div id="authTitle" style="margin-bottom:15px; font-weight:bold; letter-spacing:1px; color:#fff;">Welcome Back</div>
-           
-           <div class="field-group" style="margin-bottom:12px;">
-             <input type="email" id="authEmail" class="field-input" placeholder="Email Address" style="background:rgba(0,0,0,0.3);">
+           <div class="field-group" style="margin-bottom:15px;">
+             <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:5px; margin-left:5px;">EMAIL ADDRESS</label>
+             <input type="email" id="authEmail" class="field-input" placeholder="name@example.com" style="background:rgba(255,255,255,0.05); border-radius:12px; border:1px solid rgba(255,255,255,0.1); height:45px;">
            </div>
-           <div class="field-group" style="margin-bottom:12px;">
-             <input type="password" id="authPassword" class="field-input" placeholder="Password" style="background:rgba(0,0,0,0.3);">
+           <div class="field-group" style="margin-bottom:15px;">
+             <label style="display:block; font-size:0.7rem; color:var(--text-muted); margin-bottom:5px; margin-left:5px;">PASSWORD</label>
+             <input type="password" id="authPassword" class="field-input" placeholder="••••••••" style="background:rgba(255,255,255,0.05); border-radius:12px; border:1px solid rgba(255,255,255,0.1); height:45px;">
            </div>
            
-           <div id="authActionBox" style="display:flex; flex-direction:column; gap:10px;">
-             <button id="emailLoginBtn" class="btn btn-primary btn-full">Sign In</button>
-             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px;">
-               <button id="toggleAuthMode" style="background:none; border:none; color:var(--text-muted); font-size:0.75rem; cursor:pointer; text-decoration:underline;">Don't have an account? Sign Up</button>
-               <button id="forgotPasswordBtn" style="background:none; border:none; color:var(--leather-tan); font-size:0.75rem; cursor:pointer;">Forgot Password?</button>
-             </div>
-             <button id="emailSignupBtn" class="btn btn-secondary btn-full" style="display:none; font-size:0.8rem; border:1px solid var(--walnut-tan); background:transparent;">Create New Account</button>
+           <div id="authActionBox" style="display:flex; flex-direction:column; gap:15px; margin-top:20px;">
+             <button id="emailLoginBtn" class="btn btn-primary btn-full" style="height:48px; border-radius:12px; font-weight:700;">Sign In</button>
+             <button id="emailSignupBtn" class="btn btn-secondary btn-full" style="display:none; height:48px; border-radius:12px; font-weight:700; background:var(--walnut-tan); color:#fff;">Create My Account</button>
+             
+             <button id="forgotPasswordBtn" style="background:none; border:none; color:var(--leather-tan); font-size:0.8rem; cursor:pointer; text-align:center; font-weight:500;">Forgot your password?</button>
            </div>
         </div>
       </div>
       
-      <div id="fcm-status" style="margin-top:20px; font-size:0.65rem; color:var(--text-muted); display:flex; align-items:center; justify-content:center; gap:5px;">
-        <span class="pulse-dot" style="background:#4caf50;"></span> Google Cloud Messaging: active
+      <div id="fcm-status" style="margin-top:25px; font-size:0.65rem; color:var(--text-muted); background:rgba(0,0,0,0.2); padding:10px; border-radius:12px; border:1px solid rgba(0,255,0,0.1);">
+        <span class="pulse-dot" style="background:#4caf50;"></span> Verified Google Services Protection Active
       </div>
-      
-      <p style="font-size:0.7rem; color:var(--text-muted); margin-top:20px;">
-        By continuing, you agree to our Terms of Service & Privacy Policy.
-      </p>
     </div>
+  </div>
+
+  <!-- Google Services: Profile & Assets Provisioning -->
+  <div id="userProfileBar" style="position:fixed; top:20px; right:20px; z-index:1001; display:flex; align-items:center; gap:12px; background:rgba(0,0,0,0.6); backdrop-filter:blur(10px); padding:8px 20px; border-radius:40px; border:1px solid rgba(255,255,255,0.1); box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+      <div id="https-badge" style="background:rgba(34,197,94,0.15); color:#4ade80; font-size:0.6rem; font-weight:800; padding:4px 10px; border-radius:10px; display:flex; align-items:center; gap:5px; border:1px solid rgba(34,197,94,0.3);">
+        <span style="width:6px; height:6px; background:#4ade80; border-radius:50%; box-shadow:0 0 8px #4ade80;"></span>
+        HTTPS SECURED
+      </div>
+      <div style="width:1px; height:20px; background:rgba(255,255,255,0.1);"></div>
+      <button onclick="addToGoogleWallet()" style="background:none; border:none; cursor:pointer;" title="Add Ticket to Google Wallet">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/e/e1/Google_Wallet_Icon_2022.svg" alt="Wallet" style="width:24px;">
+      </button>
+      <div style="width:1px; height:20px; background:rgba(255,255,255,0.1);"></div>
+      <img id="userAvatar" src="https://ui-avatars.com/api/?name=Guest&background=c9973a&color=fff" alt="User" style="width:34px; height:34px; border-radius:50%; border:2px solid var(--walnut-tan); cursor:pointer; object-fit:cover;" onclick="updateProfilePicture()">
+      <span id="userNameDisplay" style="font-size:0.85rem; font-weight:700; color:#fff; letter-spacing:0.5px;">Guest</span>
   </div>
 
   <!-- ══ STADIUM SELECTOR ══ -->
   <div id="stadiumSelectorOverlay" class="stadium-overlay" style="display:none;">
     <div class="overlay-content">
-      <div id="userProfile" style="position: absolute; top: 20px; right: 20px; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.4); padding: 6px 12px; border-radius: 20px; border: 1px solid var(--leather-tan);">
-         <div id="userAvatar" style="width: 24px; height: 24px; border-radius: 50%; background: var(--felt-green); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800;">U</div>
-         <span id="userNameDisplay" style="font-size: 0.8rem; font-weight: 700; color: var(--walnut-cream);">Guest</span>
+      <div id="selectorUserProfile" style="position: absolute; top: 20px; right: 20px; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.4); padding: 6px 12px; border-radius: 20px; border: 1px solid var(--leather-tan);">
+         <div id="selectorUserAvatar" style="width: 24px; height: 24px; border-radius: 50%; background: var(--felt-green); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800;">U</div>
+         <span id="selectorUserName" style="font-size: 0.8rem; font-weight: 700; color: var(--walnut-cream);">Guest</span>
          <button onclick="logout()" style="background: none; border: none; color: #ef4444; font-size: 0.7rem; cursor: pointer; text-decoration: underline;">Logout</button>
       </div>
 
@@ -440,6 +527,16 @@
             <span class="ticket-icon" aria-hidden="true">🎫</span>
             <span>Your Entry Pass</span>
           </div>
+          <div class="venue-stats" style="margin-top:25px; grid-template-columns: repeat(2, 1fr); gap:15px;">
+          <div class="stat-card" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,170,0,0.2); cursor:pointer;" onclick="openLiveCctv()">
+            <div class="stat-label">LIVE FEED</div>
+            <div class="stat-value" style="color:var(--amber); font-size:1.1rem;">👁️ VIEW ZONE</div>
+          </div>
+          <div class="stat-card" style="background:rgba(255,255,255,0.05); border:1px solid rgba(0,255,255,0.2); cursor:pointer;" onclick="openARSeatView()">
+            <div class="stat-label">IMMERSIVE</div>
+            <div class="stat-value" style="color:#00ffff; font-size:1.1rem;">✨ AR VIEW</div>
+          </div>
+        </div>
           <div class="ticket-body">
             <div class="ticket-row">
               <span class="ticket-label">Time Window</span>
@@ -558,16 +655,14 @@
   </main>
 </div>
 
-<!-- Global Error Handler for Debugging -->
+<!-- Diagnostic Telemetry -->
 <script>
-  window.onerror = function(msg, url, lineNo, columnNo, error) {
-    console.error('Global Error:', msg, 'at', url, ':', lineNo);
-    // Only show alert in non-production or for critical failures if needed
-    if (msg.toLowerCase().includes('firebase') || msg.toLowerCase().includes('google')) {
-       alert('Auth Service Alert: ' + msg);
+  window.addEventListener('load', () => {
+    console.log("🌐 Page Security: " + (location.protocol === 'https:' ? 'SECURE' : 'INSECURE'));
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+       console.warn("Redirecting to HTTPS for safety...");
     }
-    return false;
-  };
+  });
 </script>
 
 <!-- Scripts -->

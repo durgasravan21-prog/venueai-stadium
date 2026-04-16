@@ -90,14 +90,24 @@ app.use(helmet({
   xssFilter: true,
   noSniff: true,
   frameguard: { action: 'deny' },
-  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }, // HTTPS Security
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }, // Rigid HTTPS Security
+  referrerPolicy: { policy: 'no-referrer-when-downgrade' },
   permissionsPolicy: {
     features: {
-      geolocation: ["'none'"], camera: ["'none'"], microphone: ["'none'"], payment: ["'self'"]
+      geolocation: ["'self'"], camera: ["'self'"], microphone: ["'none'"], payment: ["'self'"],
+      "publickey-credentials-get": ["*"] // Required for Google Auth 
     }
   }
 }));
+
+// FORCE SSL (Harden)
+app.use((req, res, next) => {
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
 
 // ── ADVANCED BOT PROTECTION ───────────────────────────────────────
 const BOT_WHITELIST = ['googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider', 'yandexbot'];
