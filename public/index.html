@@ -55,15 +55,15 @@
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=DEMO_KEY&libraries=places"></script>
   <!-- Google Identity Services for true OAuth -->
   <script async defer src="https://accounts.google.com/gsi/client"></script>
-  <!-- Firebase & Google Services Client SDK -->
   <script type="module">
+    // 🌐 Multi-Layer Boot Protocol (Fix: appId & Button Reactivity)
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
     import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-    import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
-    import { getMessaging } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-messaging.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
     import { getInstallations } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-installations.js";
     
-    const manifest = { 
+    // 1. ATOMIC MANIFEST (Verified Production Identity)
+    const firebaseConfig = { 
        apiKey: "AIzaSyBWpLY5RCECUpAdBalGwkPp0Kut3jf9c0s", 
        authDomain: "venueai-production.firebaseapp.com",
        projectId: "venueai-production",
@@ -74,82 +74,77 @@
        measurementId: "G-VENUEAI2026"
     };
 
-    let app, auth, analytics;
-    try {
-      // SYNCHRONOUS BOOT (Enforce Production Identity)
-      app = initializeApp(manifest);
-      if (app && app.options) app.options.appId = manifest.appId; 
-      
-      auth = getAuth(app);
-      
-      // Delayed init for analytics to ensure Installations context is ready
-      setTimeout(() => {
-        try { 
-          const ist = getInstallations(app);
-          analytics = getAnalytics(app); 
-          console.log("🚀 Production Telemetry Linked");
-          window.vAnalytics = analytics;
-        } catch(e) { console.debug("Handshake sync in progress..."); }
-      }, 600);
+    // 🔬 Handshake Guard (Force appId into memory)
+    const app = initializeApp(firebaseConfig);
+    if (app && app.options) app.options.appId = firebaseConfig.appId;
 
-      // Persistent Session Guard
-      onAuthStateChanged(auth, (user) => {
-        if (user) {
-          sessionStorage.setItem('venue_user', JSON.stringify({ 
-            name: user.displayName || 'Stadium Guest', 
-            email: user.email 
-          }));
-          const overlay = document.getElementById('authOverlay');
-          if (overlay) {
-            overlay.style.opacity = '0';
-            setTimeout(() => {
-              overlay.style.display = 'none';
-              const selector = document.getElementById('stadiumSelectorOverlay');
-              if (selector) selector.style.display = 'flex';
-              if (window.loadStadiums) window.loadStadiums();
-            }, 400);
-          }
-        }
-      });
-    } catch(fatal) {
-      console.error("🔥 Global Shield Activation:", fatal.message);
-    }
+    const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
 
-    document.getElementById('googleLoginBtn')?.addEventListener('click', () => {
-      const btn = document.getElementById('googleLoginBtn');
-      if(btn) { btn.innerHTML = '⏳ Waiting for Google...'; btn.disabled = true; }
-      
-      signInWithPopup(auth, provider)
-        .then((result) => {
-          const user = result.user;
-          sessionStorage.setItem('venue_user', JSON.stringify({ name: user.displayName, email: user.email }));
-          
-          document.getElementById('authOverlay').style.opacity = '0';
-          setTimeout(() => {
-            document.getElementById('authOverlay').style.display = 'none';
-            document.getElementById('stadiumSelectorOverlay').style.display = 'flex';
-            if (typeof loadStadiums === 'function') loadStadiums();
-          }, 500);
-        })
-        .catch((error) => {
-          console.error("Google Auth Error:", error);
-          if(btn) { btn.innerHTML = '❌ Auth Failed - Try Again'; btn.disabled = false; }
-          // Show the specific error code to help identify if it's an unauthorized domain or disabled provider
-          alert("Authentication Failed (" + (error.code || 'Unknown Error') + ").\n\nSuggestion: Ensure 'venueai-stadium.vercel.app' is added to 'Authorized Domains' in your Firebase Auth settings.");
-        });
-    });
+    // 2. INTERACTIVE LAYER (Ensures buttons work even if background sync lags)
+    console.log("🖱️ UI Integrity: Binding Listeners...");
+    
+    // Google Sign In
+    const googleBtn = document.getElementById('googleLoginBtn');
+    if (googleBtn) {
+      googleBtn.onclick = () => {
+        googleBtn.innerHTML = '⏳ Syncing...';
+        googleBtn.disabled = true;
+        signInWithPopup(auth, provider)
+          .then(res => { location.reload(); })
+          .catch(e => { 
+            console.error("Auth:", e); 
+            googleBtn.innerHTML = '❌ Retry Google';
+            googleBtn.disabled = false;
+            alert(`Auth Refused: ${e.code || e.message}`);
+          });
+      };
+    }
 
-    // Email/Password Sign In
+    // Email Sign In (Expose to window for form submission)
     window.handleEmailLogin = () => {
-      console.log("Attempting Sign In...");
-      const email = document.getElementById('authEmail').value;
-      const pass = document.getElementById('authPassword').value;
-      if(!email || !pass) return alert("Please enter both email and password.");
+      const email = document.getElementById('authEmail')?.value;
+      const pass = document.getElementById('authPassword')?.value;
+      if (!email || !pass) return alert("Credentials required.");
       
       const btn = document.getElementById('emailLoginBtn');
-      const originalText = btn.innerText;
-      btn.innerText = 'Verifying...';
+      if (btn) btn.innerText = 'Verifying...';
+
+      signInWithEmailAndPassword(auth, email, pass)
+        .then(() => { location.reload(); })
+        .catch(e => {
+          console.error("Login:", e);
+          if (btn) btn.innerText = 'Sign In';
+          alert(`Login Failed: ${e.message}`);
+        });
+    };
+
+    // 3. TELEMETRY LAYER (Non-Blocking)
+    setTimeout(() => {
+      try {
+        getInstallations(app);
+        window.vAnalytics = getAnalytics(app);
+        console.log("📊 Telemetry Synced.");
+      } catch(e) { console.warn("Analytics Sync Delayed."); }
+    }, 1000);
+
+    // 4. SESSION GUARD
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        sessionStorage.setItem('venue_user', JSON.stringify({ name: user.displayName || 'Guest', email: user.email }));
+        const overlay = document.getElementById('authOverlay');
+        if (overlay) {
+          overlay.style.opacity = '0';
+          setTimeout(() => {
+            overlay.style.display = 'none';
+            const selector = document.getElementById('stadiumSelectorOverlay');
+            if (selector) selector.style.display = 'flex';
+            if (window.loadStadiums) window.loadStadiums();
+          }, 400);
+        }
+      }
+    });
+  </script>
       btn.disabled = true;
       
       signInWithEmailAndPassword(auth, email, pass)
