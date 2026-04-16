@@ -209,11 +209,21 @@ const adminAuth = (req, res, next) => {
 app.get('/dashboard', adminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/dashboard.html', adminAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
-// Static files with caching
+// Static files with CACHE BUSTING (Req: Fix persistent appId error)
+app.use((req, res, next) => {
+  if (req.url.endsWith('.html') || req.url === '/') {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public'), {
-  maxAge: '1h',
-  etag: true,
-  lastModified: true,
+  maxAge: '0', 
+  etag: false,
+  lastModified: false,
 }));
 
 // ── RATE LIMITING (Tiered) ───────────────────────────────────────────────
