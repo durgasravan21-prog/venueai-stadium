@@ -6,7 +6,13 @@
  * - Security:      Input length limits, sanitized text rendering
  */
 
-const socket = io();
+let socket;
+try {
+  socket = typeof io !== 'undefined' ? io() : { on: () => {}, emit: () => {} };
+} catch(e) {
+  console.warn("Socket Engine: Offline mode activated.");
+  socket = { on: () => {}, emit: () => {} };
+}
 
 let currentTab  = 'venue';
 let myOrders    = [];
