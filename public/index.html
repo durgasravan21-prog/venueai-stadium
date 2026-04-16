@@ -8,7 +8,7 @@
   <title>VenueAI — Secure Smart Stadium</title>
   
   <style>
-    /* 🛡️ THE STRIKT SHIELD: Mandatory Initial Stealth */
+    /* 🛡️ THE STRIKT SHIELD */
     #app-bootloader {
       position: fixed; inset: 0; z-index: 99999;
       background: #0d1a10; display: flex; flex-direction: column;
@@ -19,20 +19,20 @@
     @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
     .boot-text { color: #f5e6c8; font-family: sans-serif; font-weight: 800; letter-spacing: 2px; }
 
-    /* Hide everything until explicitly permitted */
     #authOverlay, #stadiumSelectorOverlay, #mainContent { display: none !important; }
-    
-    /* Reveal Classes */
     body.show-auth #authOverlay { display: flex !important; }
     body.show-selection #stadiumSelectorOverlay { display: flex !important; }
     body.show-app #mainContent { display: block !important; }
+
+    .auth-toggle { margin-top: 1rem; color: #f5e6c8; font-size: 0.85rem; cursor: pointer; text-decoration: underline; }
+    .google-icon { width: 18px; height: 18px; margin-right: 10px; }
   </style>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
     
     const config = { 
        apiKey: "AIzaSyBWpLY5RCECUpAdBalGwkPp0Kut3jf9c0s", 
@@ -61,17 +61,40 @@
       signInWithPopup(auth, provider).then(() => location.reload()).catch(e => alert(e.message));
     };
 
-    window.handleEmailLogin = () => {
-      const e = document.getElementById('authEmail').value;
-      const p = document.getElementById('authPassword').value;
-      signInWithEmailAndPassword(auth, e, p).then(() => location.reload()).catch(err => alert(err.message));
+    window.handleAuthAction = (e) => {
+      if(e) e.preventDefault();
+      const email = document.getElementById('authEmail').value;
+      const pass = document.getElementById('authPassword').value;
+      const isSignUp = document.getElementById('authForm').dataset.mode === 'signup';
+
+      const action = isSignUp ? createUserWithEmailAndPassword : signInWithEmailAndPassword;
+      
+      action(auth, email, pass)
+        .then(() => location.reload())
+        .catch(err => alert(err.message));
     };
 
-    // ── THE AUTH GATE (Zero Buffering) ──
+    window.toggleAuthMode = () => {
+      const form = document.getElementById('authForm');
+      const title = document.getElementById('authHeader');
+      const btn = document.getElementById('submitBtn');
+      const toggle = document.getElementById('modeToggle');
+      
+      if (form.dataset.mode === 'signin') {
+        form.dataset.mode = 'signup';
+        title.textContent = 'Create VenueAI Account';
+        btn.textContent = 'Sign Up & Enter';
+        toggle.textContent = 'Already have an account? Login';
+      } else {
+        form.dataset.mode = 'signin';
+        title.textContent = 'Identity Verification';
+        btn.textContent = 'Verify & Enter';
+        toggle.textContent = 'New to VenueAI? Create Account';
+      }
+    };
+
     onAuthStateChanged(auth, (user) => {
       const bootloader = document.getElementById('app-bootloader');
-      
-      // Clear previous states
       document.body.classList.remove('show-auth', 'show-selection', 'show-app');
 
       if (user) {
@@ -82,7 +105,6 @@
         document.body.classList.add('show-auth');
       }
 
-      // Kill Bootloader
       setTimeout(() => {
         bootloader.style.opacity = '0';
         setTimeout(() => bootloader.style.display = 'none', 500);
@@ -90,11 +112,10 @@
     });
   </script>
 
-  <link rel="stylesheet" href="/css/attendee.css?v=2.4">
+  <link rel="stylesheet" href="/css/attendee.css?v=2.5">
 </head>
 <body>
 
-<!-- 🧬 THE SHIELD (Blocks everything during Auth Handshake) -->
 <div id="app-bootloader">
   <div class="shield-logo">🛡️</div>
   <div class="boot-text">SECURE GATEWAY...</div>
@@ -105,16 +126,23 @@
   <div id="authOverlay" class="glass-overlay">
     <div class="auth-card">
       <div class="auth-logo">🏟️ VenueAI</div>
-      <h2>Identity Verification</h2>
+      <h2 id="authHeader">Identity Verification</h2>
+      
       <div class="auth-form">
         <button id="googleLoginBtn" class="google-btn" onclick="googleLogin()">
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="">
-          Login with Google
+          <svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/><path fill="none" d="M1 1 23 23"/></svg>
+          Continue with Google
         </button>
-        <div class="divider">OR USE CREDENTIALS</div>
-        <input type="email" id="authEmail" placeholder="Email">
-        <input type="password" id="authPassword" placeholder="Password">
-        <button class="action-btn primary" onclick="handleEmailLogin()">Verify & Enter</button>
+        
+        <div class="divider">OR SECURE LOGIN</div>
+        
+        <form id="authForm" data-mode="signin" onsubmit="handleAuthAction(event)">
+          <input type="email" id="authEmail" placeholder="Email" required autocomplete="email">
+          <input type="password" id="authPassword" placeholder="Password" required autocomplete="current-password">
+          <button type="submit" id="submitBtn" class="action-btn primary">Verify & Enter</button>
+        </form>
+
+        <div id="modeToggle" class="auth-toggle" onclick="toggleAuthMode()">New to VenueAI? Create Account</div>
       </div>
     </div>
   </div>
@@ -122,22 +150,23 @@
   <!-- SELECTION -->
   <div id="stadiumSelectorOverlay" class="glass-overlay">
     <div class="selection-card">
+      <div class="auth-logo" style="margin-bottom:0.5rem">🏟️</div>
       <h2>Select Your Venue</h2>
+      <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:1.5rem">Authenticated: Pick a stadium to sync</p>
       <div id="stadiumGrid" class="stadium-grid"></div>
     </div>
   </div>
 
-  <!-- APP (ONLY REVEALED ENTIRELY AFTER SELECTION) -->
+  <!-- APP -->
   <main id="mainContent" class="app-container">
     <header class="top-nav">
-      <div class="user-info" onclick="vLogout()">
+      <div class="user-info" onclick="vLogout()" title="Click to Logout">
         <span class="user-name" id="userNameDisplay">Guest</span>
-        <span class="user-status">🟢 AUTHENTICATED</span>
+        <span class="user-status">🟢 VERIFIED PROFILE</span>
       </div>
       <div id="currentStadiumName" class="stadium-name-badge">VenueAI</div>
     </header>
 
-    <!-- Content Sections -->
     <section id="tab-venue" class="tab-panel active">
       <div class="live-match-card">
         <div class="match-teams">
@@ -163,7 +192,7 @@
   </main>
 </div>
 
-<script src="/js/attendee.js?v=2.4"></script>
+<script src="/js/attendee.js?v=2.5"></script>
 
 </body>
 </html>
