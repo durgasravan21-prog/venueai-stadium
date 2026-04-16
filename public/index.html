@@ -57,7 +57,7 @@
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
 
-    window.triggerGoogleAuth = () => {
+    document.getElementById('googleLoginBtn')?.addEventListener('click', () => {
       const btn = document.getElementById('googleLoginBtn');
       if(btn) { btn.innerHTML = '⏳ Waiting for Google...'; btn.disabled = true; }
       
@@ -79,7 +79,7 @@
           // Show the specific error code to help identify if it's an unauthorized domain or disabled provider
           alert("Authentication Failed (" + (error.code || 'Unknown Error') + ").\n\nSuggestion: Ensure 'venueai-stadium.vercel.app' is added to 'Authorized Domains' in your Firebase Auth settings.");
         });
-    };
+    });
   </script>
 
   <!-- Fonts -->
@@ -122,7 +122,7 @@
       <p>Please sign in to access your digital stadium experience</p>
       
       <div class="auth-box">
-        <button id="googleLoginBtn" class="btn btn-secondary btn-full" style="background:#fff; color:#000; font-size:1rem; gap:12px; margin-top:24px;" onclick="if(window.triggerGoogleAuth) window.triggerGoogleAuth()">
+        <button id="googleLoginBtn" class="btn btn-secondary btn-full" style="background:#fff; color:#000; font-size:1rem; gap:12px; margin-top:24px;">
           <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="" style="width:18px;">
           Sign in with Google
         </button>

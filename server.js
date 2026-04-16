@@ -91,7 +91,7 @@ app.use(helmet({
   noSniff: true,
   frameguard: { action: 'deny' },
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }, // HTTPS Security
-  referrerPolicy: { policy: 'no-referrer' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   permissionsPolicy: {
     features: {
       geolocation: ["'none'"], camera: ["'none'"], microphone: ["'none'"], payment: ["'self'"]

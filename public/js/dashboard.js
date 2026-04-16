@@ -33,6 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (currentStadium) {
     loginToStadium(currentStadium);
   }
+
+  document.getElementById('accessBtn')?.addEventListener('click', () => {
+    loginToStadium();
+  });
   
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.tagName === 'INPUT') {

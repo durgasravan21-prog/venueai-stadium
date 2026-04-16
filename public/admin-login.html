@@ -115,16 +115,16 @@
       <input type="password" id="password" placeholder="Enter Password" aria-required="true" />
     </div>
     
-    <button class="btn" onclick="login()">Enter Command Center</button>
+    <button class="btn" id="loginBtn">Enter Command Center</button>
     
     <div id="error-msg"></div>
   </div>
 
   <script>
-    async function login() {
+    document.getElementById('loginBtn').addEventListener('click', async () => {
       const u = document.getElementById('username').value;
       const p = document.getElementById('password').value;
-      const btn = document.querySelector('.btn');
+      const btn = document.getElementById('loginBtn');
       const err = document.getElementById('error-msg');
       
       err.style.display = 'none';
@@ -150,7 +150,7 @@
         err.style.display = 'block';
         btn.innerText = 'Enter Command Center';
       }
-    }
+    });
   </script>
 </body>
 </html>
