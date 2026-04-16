@@ -614,6 +614,12 @@ let MENU = [
   { id: 'm12', name: 'Cookie Pack',     price: 120, category: 'dessert',  prepTime: 1, image: '🍪', available: true }
 ];
 
+const TICKET_TYPES = [
+  { id: 'S1', name: 'West Block - Gate 4', price: 1200, type: 'ticket' },
+  { id: 'S2', name: 'East Stand - Gate 2', price: 900, type: 'ticket' },
+  { id: 'S3', name: 'VIP Lounge - Gate 1', price: 4500, type: 'ticket' }
+];
+
 // Orders tracking
 let orders = [];
 let orderIdCounter = 1000;
@@ -1357,15 +1363,22 @@ app.post('/api/payment/create-order', async (req, res) => {
   let total = 0;
   let maxPrepTime = 0;
   const orderItems = items.map(item => {
-    const menuItem = MENU.find(m => m.id === item.id);
-    if (!menuItem || !menuItem.available) return null;
+    // Check Menu first, then Ticket Types
+    const menuItem = MENU.find(m => m.id === item.id) || TICKET_TYPES.find(t => t.id === item.id);
+    if (!menuItem) return null;
     total += menuItem.price * (item.qty || 1);
-    maxPrepTime = Math.max(maxPrepTime, menuItem.prepTime);
+    maxPrepTime = Math.max(maxPrepTime, menuItem.prepTime || 0);
     return { ...menuItem, qty: item.qty || 1 };
   }).filter(Boolean);
 
   if (!orderItems.length) {
     return res.status(400).json({ success: false, error: 'All selected items are unavailable' });
+  }
+
+  // Handle Tickets specifically if any
+  const hasTicket = orderItems.some(i => i.type === 'ticket');
+  if (hasTicket && items.length > 1) {
+    return res.status(400).json({ success: false, error: 'Tickets must be purchased separately' });
   }
 
   // Generate internal pending order ref

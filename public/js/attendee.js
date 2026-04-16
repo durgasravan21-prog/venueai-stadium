@@ -60,59 +60,70 @@ async function loadConcessions(sid) {
   try {
     const res = await fetch(`/api/venue?stadiumId=${sid}`);
     const data = await res.json();
-    if(data.success) {
-      stadiumConcessions = data.data.concessions || [];
-    }
+    if(data.success) stadiumConcessions = data.data.concessions || [];
   } catch (e) { console.warn("CONCESSION_LOAD_ERR", e); }
 }
 
 function updateAllMaps(sid) {
   const mainMap = document.getElementById('tab-nav');
   const miniMap = document.getElementById('venueMiniMap');
-  
   const MAP_EMBEDS = {
     'hyderabad_stadium': 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3807.41!2d78.5484!3d17.4062!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcb99daeaeba2ad%3A0x633630fbc0536417!2sRajiv%20Gandhi%20International%20Cricket%20Stadium!5e0!3m2!1sen!2sin!4v1713271200000',
     'eden_gardens': 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3684.3!2d88.34!3d22.56!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a02770577777777%3A0x7777777777777777!2sEden%20Gardens!5e0!3m2!1sen!2sin!4v1713271200000',
     'ahmedabad_stadium': 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3669.7!2d72.59!3d23.09!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x395e83ec50f3b907%3A0x867332f146f7f63d!2sNarendra%20Modi%20Stadium!5e0!3m2!1sen!2sin!4v1713271200000'
   };
-
   const url = MAP_EMBEDS[sid] || MAP_EMBEDS['hyderabad_stadium'];
-
-  if (mainMap) {
-    mainMap.innerHTML = `
-      <div class="interactive-map">
-         <iframe src="${url}" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
-         <div class="map-overlay">
-            <div class="map-chip">360° ARENA VIEW</div>
-            <div class="map-chip">GATES OPEN</div>
-         </div>
-      </div>
-    `;
-  }
-
-  if (miniMap) {
-    miniMap.innerHTML = `<iframe src="${url}" width="100%" height="100%" style="border:0; opacity:0.8" allowfullscreen="" loading="lazy"></iframe>`;
-  }
+  if (mainMap) mainMap.innerHTML = `<div class="interactive-map"><iframe src="${url}" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe><div class="map-overlay"><div class="map-chip">360° ARENA VIEW</div><div class="map-chip">GATES OPEN</div></div></div>`;
+  if (miniMap) miniMap.innerHTML = `<iframe src="${url}" width="100%" height="100%" style="border:0; opacity:0.8" allowfullscreen="" loading="lazy"></iframe>`;
 }
 
-async function loadInitialMatchState(sid) {
+// ── PAYMENT SYSTEM ──────────────────────────────────────────
+async function processPayment(items, zone = 'General', seat = 'G-12') {
   try {
-    const res = await fetch(`/api/match?stadiumId=${sid}`);
-    const data = await res.json();
-    if(data.success && data.data) updateMatchUI(data.data);
-  } catch (e) { console.warn("INIT_MATCH_ERR", e); }
-}
+    const res = await fetch('/api/payment/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, zone, seat })
+    });
+    const { data } = await res.json();
+    
+    return new Promise((resolve) => {
+      const options = {
+        key: data.rzpKeyId,
+        amount: data.total * 100,
+        currency: "INR",
+        name: "VenueAI Stadium",
+        description: data.items.map(i => i.name).join(', '),
+        order_id: data.rzpOrderId,
+        handler: async (response) => {
+          const verifyRes = await fetch(`/api/payment/verify?stadiumId=${currentStadiumId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pendingRef: data.pendingRef,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              demoSuccess: data.demoMode
+            })
+          });
+          const verifyData = await verifyRes.json();
+          resolve(verifyData);
+        },
+        modal: { ondismiss: () => resolve({ success: false, error: 'Payment Cancelled' }) },
+        theme: { color: "#f5e6c8" }
+      };
 
-// ── NAVIGATION ───────────────────────────────────────────────
-function switchTab(tabId) {
-  document.querySelectorAll('.tab-panel').forEach(p => { p.hidden = true; p.classList.remove('active'); });
-  const target = document.getElementById(`tab-${tabId}`);
-  if(target) { target.hidden = false; target.classList.add('active'); }
-  document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
-  if(tabId === 'food') renderMenu();
-  if(tabId === 'orders') renderOrders();
+      if (data.demoMode) {
+        // Automatically simulate success in demo mode
+        setTimeout(() => options.handler({ razorpay_order_id: data.rzpOrderId, razorpay_payment_id: 'pay_DEMO_'+Date.now(), razorpay_signature: 'demo' }), 1000);
+      } else {
+        const rzp = new Razorpay(options);
+        rzp.open();
+      }
+    });
+  } catch (err) { return { success: false, error: 'Payment Initialization Failed' }; }
 }
-window.switchTab = switchTab;
 
 // ── VENUE & SLOTS ───────────────────────────────────────────
 function renderMatchSlots() {
@@ -130,15 +141,18 @@ function renderMatchSlots() {
   `).join('');
 }
 
-function bookSlot(id, name) {
+async function bookSlot(id, name) {
   const today = new Date().toLocaleDateString();
-  const ticket = { 
-    id: 'TKT-' + Math.random().toString(36).substr(2, 6).toUpperCase(), 
-    name, type: 'ticket', status: 'valid', date: today, time: new Date().toLocaleTimeString() 
-  };
-  myTickets.unshift(ticket);
-  localStorage.setItem('venue_tickets', JSON.stringify(myTickets));
-  showQR(ticket.id, name);
+  const hasTicketToday = myTickets.some(t => t.date === today);
+  if (hasTicketToday) { alert("⛔ DAILY LIMIT REACHED: You have already booked a ticket for today."); return; }
+
+  const result = await processPayment([{ id, qty: 1 }]);
+  if (result.success) {
+    const ticket = { id: 'TKT-' + Math.random().toString(36).substr(2, 6).toUpperCase(), name, type: 'ticket', status: 'valid', date: today, time: new Date().toLocaleTimeString() };
+    myTickets.unshift(ticket);
+    localStorage.setItem('venue_tickets', JSON.stringify(myTickets));
+    showQR(ticket.id, name);
+  } else { alert(`❌ ${result.error}`); }
 }
 window.bookSlot = bookSlot;
 
@@ -146,9 +160,7 @@ function showQR(id, desc) {
   const modal = document.getElementById('qrModal');
   const img = document.getElementById('qrImg');
   const details = document.getElementById('qrDetails');
-  // Use a highly redundant QR service
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(id)}`;
-  img.src = qrUrl;
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(id)}`;
   details.textContent = `${desc} (${id})`;
   modal.style.display = 'flex';
 }
@@ -173,62 +185,47 @@ async function renderMenu(category = 'all') {
   `).join('');
 }
 
-window.filterMenu = (cat, el) => {
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  renderMenu(cat);
-};
-
 async function addToOrder(itemId) {
   const item = fullMenu.find(i => i.id === itemId);
   if(!item) return;
 
-  if (!stadiumConcessions.length) {
-    await loadConcessions(currentStadiumId);
-  }
-
   const activeConcession = stadiumConcessions.find(c => c.status === 'open') || stadiumConcessions[0];
-
-  try {
-    const payload = {
-      stadiumId: currentStadiumId,
-      items: [{ id: itemId, qty: 1 }],
-      concessionId: activeConcession ? activeConcession.id : null,
-      zone: activeConcession ? activeConcession.zone : 'General',
-      seat: 'G-12'
-    };
-    const res = await fetch('/api/food/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    const data = await res.json();
-    if (data.success) {
-      const order = { ...item, ...data.data, timestamp: new Date().toLocaleTimeString() };
-      myOrders.unshift(order);
-      localStorage.setItem('venue_orders', JSON.stringify(myOrders));
-      alert(`✅ Order Created! Staff are preparing ${item.name} at ${activeConcession.name}.`);
-    } else { alert(`❌ Order Error: ${data.error}`); }
-  } catch (err) { alert("❌ System offline. Ordering failed."); }
+  const result = await processPayment([{ id: itemId, qty: 1 }], activeConcession?.zone, 'G-12');
+  
+  if (result.success) {
+    const order = { ...item, ...result.data, timestamp: new Date().toLocaleTimeString() };
+    myOrders.unshift(order);
+    localStorage.setItem('venue_orders', JSON.stringify(myOrders));
+    alert(`✅ Order Created! Staff are preparing ${item.name}.`);
+  } else { alert(`❌ ${result.error}`); }
 }
 window.addToOrder = addToOrder;
 
-// ── ORDERS ───────────────────────────────────────────────────
+// ── SHARED ──────────────────────────────────────────────────
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-panel').forEach(p => { p.hidden = true; p.classList.remove('active'); });
+  const target = document.getElementById(`tab-${tabId}`);
+  if(target) { target.hidden = false; target.classList.add('active'); }
+  document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+  if(tabId === 'food') renderMenu();
+  if(tabId === 'orders') renderOrders();
+}
+window.switchTab = switchTab;
+
 function renderOrders() {
-  const ticketList = document.getElementById('ticketList');
-  const foodList = document.getElementById('orderList');
-  if(ticketList) ticketList.innerHTML = myTickets.map(t => `
-    <div class="order-card" onclick="showQR('${t.id}', '${t.name}')">
-      <div class="order-icon">🎟️</div><div class="order-info"><h5>${t.name}</h5><span>${t.id} · ${t.time}</span></div><div class="qr-trigger">QR</div>
-    </div>
-  `).join('') || '<div class="empty">No tickets.</div>';
-  if(foodList) foodList.innerHTML = myOrders.map(o => `
-    <div class="order-card">
-      <div class="order-icon">${o.type === 'beverage' ? '🥤' : '🍔'}</div>
-      <div class="order-info"><h5>${o.name}</h5><span>${(o.status || 'preparing').toUpperCase()} · ₹${o.totalPrice || o.price}</span></div>
-      <div class="status-dot ${(o.status || 'preparing')}"></div>
-    </div>
-  `).join('') || '<div class="empty">No food orders.</div>';
+  const tL = document.getElementById('ticketList');
+  const fL = document.getElementById('orderList');
+  if(tL) tL.innerHTML = myTickets.map(t => `<div class="order-card" onclick="showQR('${t.id}', '${t.name}')"><div class="order-icon">🎟️</div><div class="order-info"><h5>${t.name}</h5><span>${t.id} · ${t.time}</span></div><div class="qr-trigger">QR</div></div>`).join('') || '<div class="empty">No tickets.</div>';
+  if(fL) fL.innerHTML = myOrders.map(o => `<div class="order-card"><div class="order-icon">${o.category === 'beverage' ? '🥤' : '🍔'}</div><div class="order-info"><h5>${o.name}</h5><span>${(o.status || 'preparing').toUpperCase()} · ₹${o.totalPrice || o.price}</span></div><div class="status-dot ${(o.status || 'preparing')}"></div></div>`).join('') || '<div class="empty">No food orders.</div>';
 }
 
-// ── SOCKET HANDLERS ──────────────────────────────────────────
-socket.on('match_update', data => updateMatchUI(data));
+socket.on('match_update', data => {
+  const hN = document.getElementById('homeName'); if(hN) hN.textContent = data.homeTeam;
+  const aN = document.getElementById('awayName'); if(aN) aN.textContent = data.awayTeam;
+  const hS = document.getElementById('homeScore'); if(hS) hS.textContent = data.homeScore;
+  const aS = document.getElementById('awayScore'); if(aS) aS.textContent = data.awayScore;
+});
+
 socket.on('order_update', order => {
   const idx = myOrders.findIndex(o => o.id === order.id);
   if (idx !== -1) {
@@ -237,11 +234,3 @@ socket.on('order_update', order => {
     if(!document.getElementById('tab-orders').hidden) renderOrders();
   }
 });
-
-function updateMatchUI(data) {
-  if(!data) return;
-  const hN = document.getElementById('homeName'); if(hN) hN.textContent = data.homeTeam;
-  const aN = document.getElementById('awayName'); if(aN) aN.textContent = data.awayTeam;
-  const hS = document.getElementById('homeScore'); if(hS) hS.textContent = data.homeScore;
-  const aS = document.getElementById('awayScore'); if(aS) aS.textContent = data.awayScore;
-}
