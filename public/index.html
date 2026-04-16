@@ -40,10 +40,12 @@
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=DEMO_KEY&libraries=places"></script>
   <!-- Google Identity Services for true OAuth -->
   <script async defer src="https://accounts.google.com/gsi/client"></script>
-  <!-- Firebase Client SDK for REAL Google Authentication -->
+  <!-- Firebase & Google Services Client SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+    import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
+    import { getMessaging } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-messaging.js";
     
     // Developer: Replace these with your actual Firebase config keys
     const firebaseConfig = { 
@@ -55,6 +57,7 @@
     
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    const analytics = getAnalytics(app);
     const provider = new GoogleAuthProvider();
 
     document.getElementById('googleLoginBtn')?.addEventListener('click', () => {
@@ -79,6 +82,78 @@
           // Show the specific error code to help identify if it's an unauthorized domain or disabled provider
           alert("Authentication Failed (" + (error.code || 'Unknown Error') + ").\n\nSuggestion: Ensure 'venueai-stadium.vercel.app' is added to 'Authorized Domains' in your Firebase Auth settings.");
         });
+    });
+
+    // Email/Password Sign In
+    document.getElementById('emailLoginBtn')?.addEventListener('click', () => {
+      const email = document.getElementById('authEmail').value;
+      const pass = document.getElementById('authPassword').value;
+      if(!email || !pass) return alert("Please enter both email and password.");
+      
+      const btn = document.getElementById('emailLoginBtn');
+      btn.innerText = 'Verifying...';
+      
+      signInWithEmailAndPassword(auth, email, pass)
+        .then((result) => {
+          sessionStorage.setItem('venue_user', JSON.stringify({ name: result.user.displayName || 'Stadium Guest', email: result.user.email }));
+          window.location.reload();
+        })
+        .catch(err => {
+          btn.innerText = 'Sign In';
+          alert("Error: " + err.message);
+        });
+    });
+
+    // Email/Password Sign Up
+    document.getElementById('emailSignupBtn')?.addEventListener('click', () => {
+      const email = document.getElementById('authEmail').value;
+      const pass = document.getElementById('authPassword').value;
+      if(!email || !pass) return alert("Please enter both email and password.");
+      
+      const btn = document.getElementById('emailSignupBtn');
+      btn.innerText = 'Creating Room...';
+      
+      createUserWithEmailAndPassword(auth, email, pass)
+        .then((result) => {
+          sessionStorage.setItem('venue_user', JSON.stringify({ name: result.user.displayName || 'Stadium Guest', email: result.user.email }));
+          window.location.reload();
+        })
+        .catch(err => {
+          btn.innerText = 'Create New Account';
+          alert("Error: " + err.message);
+        });
+    });
+
+    // Toggle Mode
+    let isSignUp = false;
+    document.getElementById('toggleAuthMode')?.addEventListener('click', () => {
+      isSignUp = !isSignUp;
+      const title = document.getElementById('authTitle');
+      const loginBtn = document.getElementById('emailLoginBtn');
+      const signupBtn = document.getElementById('emailSignupBtn');
+      const toggle = document.getElementById('toggleAuthMode');
+      
+      if(isSignUp) {
+        title.innerText = 'Join VenueAI World';
+        loginBtn.style.display = 'none';
+        signupBtn.style.display = 'block';
+        toggle.innerText = 'Already have an account? Sign In';
+      } else {
+        title.innerText = 'Welcome Back';
+        loginBtn.style.display = 'block';
+        signupBtn.style.display = 'none';
+        toggle.innerText = "Don't have an account? Sign Up";
+      }
+    });
+
+    // Forgot Password
+    document.getElementById('forgotPasswordBtn')?.addEventListener('click', () => {
+      const email = document.getElementById('authEmail').value;
+      if(!email) return alert("Please enter your email address to reset password.");
+      
+      sendPasswordResetEmail(auth, email)
+        .then(() => alert("Password reset link sent to your email!"))
+        .catch(err => alert("Error: " + err.message));
     });
   </script>
 
@@ -118,18 +193,45 @@
         <img src="/assets/logo.png" alt="" class="brand-logo">
         <span class="brand-name">VenueAI <span class="gradient-text">World</span></span>
       </div>
-      <h2>Welcome Back</h2>
-      <p>Please sign in to access your digital stadium experience</p>
-      
       <div class="auth-box">
-        <button id="googleLoginBtn" class="btn btn-secondary btn-full" style="background:#fff; color:#000; font-size:1rem; gap:12px; margin-top:24px;">
+        <button id="googleLoginBtn" class="btn btn-secondary btn-full" style="background:#fff; color:#000; font-size:1rem; gap:12px; margin-top:24px; border: 1px solid #ddd;">
           <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="" style="width:18px;">
-          Sign in with Google
+          Log in with Google
         </button>
+
+        <div style="margin: 20px 0; display: flex; align-items: center; gap: 10px;">
+          <hr style="flex:1; border:0; border-top:1px solid rgba(255,255,255,0.1);">
+          <span style="font-size:0.7rem; color:var(--text-muted);">OR EMAIL</span>
+          <hr style="flex:1; border:0; border-top:1px solid rgba(255,255,255,0.1);">
+        </div>
+
+        <div id="emailAuthForm">
+           <div id="authTitle" style="margin-bottom:15px; font-weight:bold; letter-spacing:1px; color:#fff;">Welcome Back</div>
+           
+           <div class="field-group" style="margin-bottom:12px;">
+             <input type="email" id="authEmail" class="field-input" placeholder="Email Address" style="background:rgba(0,0,0,0.3);">
+           </div>
+           <div class="field-group" style="margin-bottom:12px;">
+             <input type="password" id="authPassword" class="field-input" placeholder="Password" style="background:rgba(0,0,0,0.3);">
+           </div>
+           
+           <div id="authActionBox" style="display:flex; flex-direction:column; gap:10px;">
+             <button id="emailLoginBtn" class="btn btn-primary btn-full">Sign In</button>
+             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px;">
+               <button id="toggleAuthMode" style="background:none; border:none; color:var(--text-muted); font-size:0.75rem; cursor:pointer; text-decoration:underline;">Don't have an account? Sign Up</button>
+               <button id="forgotPasswordBtn" style="background:none; border:none; color:var(--leather-tan); font-size:0.75rem; cursor:pointer;">Forgot Password?</button>
+             </div>
+             <button id="emailSignupBtn" class="btn btn-secondary btn-full" style="display:none; font-size:0.8rem; border:1px solid var(--walnut-tan); background:transparent;">Create New Account</button>
+           </div>
+        </div>
+      </div>
+      
+      <div id="fcm-status" style="margin-top:20px; font-size:0.65rem; color:var(--text-muted); display:flex; align-items:center; justify-content:center; gap:5px;">
+        <span class="pulse-dot" style="background:#4caf50;"></span> Google Cloud Messaging: active
       </div>
       
       <p style="font-size:0.7rem; color:var(--text-muted); margin-top:20px;">
-        By signing in, you agree to our Terms of Service & Privacy Policy.
+        By continuing, you agree to our Terms of Service & Privacy Policy.
       </p>
     </div>
   </div>

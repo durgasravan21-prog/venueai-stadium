@@ -1551,12 +1551,19 @@ app.get('/api/routing/optimal', (req, res) => {
   res.json({ success: true, data: { recommended: pathOptions[0], alternatives: pathOptions.slice(1), lowCongestionGates: lowGates } });
 });
 
+/**
+ * @api {get} /api/stadium/:id Get live stadium state & venue info
+ */
 app.get('/api/stadium/:id', (req, res) => {
   const sid = req.params.id;
-  // On-demand Reality Sync trigger for Vercel/Serverless robustness
+  if (!stadiumStates[sid]) {
+    return res.status(404).json({ success: false, error: 'Stadium not found' });
+  }
+  
+  // On-demand Reality Sync trigger
   applyRealitySync();
-  const state = stadiumStates[sid] || stadiumStates['hyderabad_stadium'];
-  const venue = stadiumVenues[sid] || stadiumVenues['hyderabad_stadium'];
+  const state = stadiumStates[sid];
+  const venue = stadiumVenues[sid];
   res.json({ success: true, data: { state, venue } });
 });
 

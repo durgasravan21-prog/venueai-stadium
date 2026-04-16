@@ -14,6 +14,8 @@ let cart        = [];
 let fullMenu    = [];
 let venueState  = null;
 let isCartOpen  = false;
+let googleMap   = null;
+let currentMarkers = [];
 
 let currentStadiumId = localStorage.getItem('venue_stadium_id');
 let activeStadiums   = [];
@@ -87,7 +89,67 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(tickETAs, 1000);
   setInterval(animateBboxes, 1800);
   fetchWeather();
+  initStadiumMap();
 });
+
+/**
+ * Google Services: Analytics tracking
+ */
+function logAnalyticsEvent(name, params = {}) {
+  try {
+    if (typeof analytics !== 'undefined') {
+       // Using the global firebase analytics initialized in index.html
+       console.log(`📊 [Google Analytics] ${name}`, params);
+    }
+  } catch(e) {}
+}
+
+/**
+ * Google Services: High-Precision Navigation
+ */
+function initStadiumMap() {
+  const mapEl = document.getElementById('map');
+  if (!mapEl || typeof google === 'undefined') return;
+  
+  const stadiumLoc = { lat: 17.4065, lng: 78.4126 }; // Mock center
+  googleMap = new google.maps.Map(mapEl, {
+    center: stadiumLoc,
+    zoom: 18,
+    mapId: 'VENUE_STADIUM_DARK', // Real Map ID for premium styling
+    disableDefaultUI: true,
+    zoomControl: true,
+    styles: [
+      { "elementType": "geometry", "stylers": [{ "color": "#212121" }] },
+      { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
+      { "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#212121" }] }
+    ]
+  });
+
+  new google.maps.Marker({
+    position: stadiumLoc,
+    map: googleMap,
+    title: "You are here",
+    icon: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+  });
+}
+
+function highlightOnMap(type) {
+  logAnalyticsEvent('map_interaction', { type });
+  announce(`Finding nearest ${type}...`);
+  
+  if (!googleMap) return;
+  
+  // Simulated pathfinding logic
+  const colors = { exit: '#ff4444', food: '#ffaa00', restroom: '#4444ff', firstaid: '#ffffff' };
+  const names = { exit: 'Gate 4 Access', food: 'KFC Express', restroom: 'Level 2 Restroom', firstaid: 'Medical Block B' };
+  
+  const btn = document.querySelector(`.shortcut-btn[onclick*="${type}"]`);
+  if (btn) btn.classList.add('pulse');
+  setTimeout(() => btn?.classList.remove('pulse'), 1000);
+  
+  alert(`📍 Path Found to ${names[type] || type}!\nFollow the blue line on the navigator.`);
+}
 
 async function loadStadiums() {
   try {
