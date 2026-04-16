@@ -1,7 +1,7 @@
 const socket = io();
 
 // ── STATE ────────────────────────────────────────────────────
-let currentStadiumId = null;
+let currentStadiumId = localStorage.getItem('venue_stadium_id') || 'hyderabad_stadium';
 let fullMenu = [];
 let myOrders = JSON.parse(localStorage.getItem('venue_orders') || '[]');
 let myTickets = JSON.parse(localStorage.getItem('venue_tickets') || '[]');
@@ -11,6 +11,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const user = JSON.parse(sessionStorage.getItem('venue_user'));
   if (user) {
     document.getElementById('userNameDisplay').textContent = user.name;
+    // Auto-sync if stadium already selected
+    if(document.body.classList.contains('show-app')) {
+      syncWithStadium(currentStadiumId);
+    }
   }
 });
 
@@ -42,24 +46,54 @@ window.loadStadiums = loadStadiums;
 
 function enterStadium(sid) {
   if (!sessionStorage.getItem('venue_user')) { location.reload(); return; }
+  syncWithStadium(sid);
+}
+window.enterStadium = enterStadium;
+
+function syncWithStadium(sid) {
   currentStadiumId = sid;
   localStorage.setItem('venue_stadium_id', sid);
   document.body.classList.remove('show-selection');
   document.body.classList.add('show-app');
+  
+  document.getElementById('currentStadiumName').textContent = sid.replace('_', ' ').toUpperCase();
+  
   socket.emit('join_stadium', sid);
   renderMatchSlots();
+  loadInitialMatchState(sid);
 }
-window.enterStadium = enterStadium;
 
-// ── NAVIGATION ───────────────────────────────────────────────
+async function loadInitialMatchState(sid) {
+  try {
+    const res = await fetch(`/api/match?stadiumId=${sid}`);
+    const data = await res.json();
+    if(data.success && data.data) updateMatchUI(data.data);
+  } catch (e) { console.warn("INIT_MATCH_ERR", e); }
+}
+
+// ── NAVIGATION (FIXED BUTTONS) ──────────────────────────────
 function switchTab(tabId) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.hidden = true);
-  document.getElementById(`tab-${tabId}`).hidden = false;
+  console.log(`🔀 Switching to: ${tabId}`);
   
+  // 1. Hide all panels with strict display logic
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.hidden = true;
+    p.classList.remove('active');
+  });
+
+  // 2. Reveal target panel
+  const target = document.getElementById(`tab-${tabId}`);
+  if(target) {
+    target.hidden = false;
+    target.classList.add('active');
+  }
+
+  // 3. Update navbar highlights
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tabId);
   });
 
+  // 4. Trigger specific data renders
   if(tabId === 'food') renderMenu();
   if(tabId === 'orders') renderOrders();
 }
@@ -87,12 +121,10 @@ function renderMatchSlots() {
 
 function bookSlot(id, name) {
   const today = new Date().toLocaleDateString();
-  
-  // 🛡️ DAILY QUOTA CHECK
   const hasTicketToday = myTickets.some(t => t.date === today);
   
   if (hasTicketToday) {
-    alert("⛔ DAILY LIMIT REACHED: You have already booked a ticket for today's event. Only one booking per day is allowed.");
+    alert("⛔ DAILY LIMIT REACHED: You have already booked a ticket for today's event.");
     return;
   }
 
@@ -107,8 +139,6 @@ function bookSlot(id, name) {
   
   myTickets.unshift(ticket);
   localStorage.setItem('venue_tickets', JSON.stringify(myTickets));
-  
-  // Show QR Instantly
   showQR(ticket.id, name);
 }
 window.bookSlot = bookSlot;
@@ -117,15 +147,13 @@ function showQR(id, desc) {
   const modal = document.getElementById('qrModal');
   const img = document.getElementById('qrImg');
   const details = document.getElementById('qrDetails');
-  
-  // Generate a mock QR (Real URL in production)
   img.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${id}`;
   details.textContent = `${desc} (${id})`;
   modal.style.display = 'flex';
 }
 window.showQR = showQR;
 
-// ── FOOD COURT ───────────────────────────────────────────────
+// ── FOOD COURT (SYNCED TO STAFF) ───────────────────────────
 async function renderMenu(category = 'all') {
   const grid = document.getElementById('menuGrid');
   if(!grid) return;
@@ -144,10 +172,11 @@ async function renderMenu(category = 'all') {
       <div class="menu-details">
         <h5>${item.name}</h5>
         <span class="price">₹${item.price}</span>
+        <p class="prep-time">${item.prepTime} min prep</p>
       </div>
-      <button class="add-btn" onclick="addToCart('${item.id}')">+</button>
+      <button class="add-btn" onclick="addToOrder('${item.id}')">+</button>
     </div>
-  `).join('') || '<div class="empty">No items found in this section.</div>';
+  `).join('');
 }
 
 window.filterMenu = (cat, el) => {
@@ -156,60 +185,84 @@ window.filterMenu = (cat, el) => {
   renderMenu(cat);
 };
 
-function addToCart(id) {
-  const item = fullMenu.find(i => i.id === id);
+async function addToOrder(itemId) {
+  const item = fullMenu.find(i => i.id === itemId);
   if(!item) return;
 
-  const order = { ...item, id: 'ORD-' + Date.now(), status: 'preparing', timestamp: new Date().toLocaleTimeString() };
-  myOrders.unshift(order);
-  localStorage.setItem('venue_orders', JSON.stringify(myOrders));
-  alert(`✅ Order Placed for ${item.name}! Check 'Orders' tab.`);
+  try {
+    const payload = {
+      stadiumId: currentStadiumId,
+      items: [{ id: itemId, qty: 1 }],
+      zone: 'Zone A', // Default or prompt user
+      seat: 'G-12'    // Default placeholder
+    };
+
+    const res = await fetch('/api/food/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      const order = { ...item, ...data.data, timestamp: new Date().toLocaleTimeString() };
+      myOrders.unshift(order);
+      localStorage.setItem('venue_orders', JSON.stringify(myOrders));
+      alert(`✅ Order Placed! Staff are preparing your ${item.name}.`);
+      if(document.getElementById('tab-orders').classList.contains('active')) renderOrders();
+    } else {
+      alert(`❌ Error: ${data.error}`);
+    }
+  } catch (err) {
+    alert("❌ Ordering failed. Please check your connection.");
+  }
 }
-window.addToCart = addToCart;
+window.addToOrder = addToOrder;
 
 // ── ORDERS ───────────────────────────────────────────────────
 function renderOrders() {
   const ticketList = document.getElementById('ticketList');
   const foodList = document.getElementById('orderList');
   
-  // 🎟️ Render Tickets
   if(ticketList) {
     ticketList.innerHTML = myTickets.map(t => `
       <div class="order-card" onclick="showQR('${t.id}', '${t.name}')">
         <div class="order-icon">🎟️</div>
-        <div class="order-info">
-          <h5>${t.name}</h5>
-          <span>${t.id} · ${t.time}</span>
-        </div>
+        <div class="order-info"><h5>${t.name}</h5><span>${t.id} · ${t.time}</span></div>
         <div class="qr-trigger">QR</div>
       </div>
     `).join('') || '<div class="empty">No tickets booked.</div>';
   }
 
-  // 🍔 Render Food
   if(foodList) {
     foodList.innerHTML = myOrders.map(o => `
       <div class="order-card">
         <div class="order-icon">${o.type === 'beverage' ? '🥤' : '🍔'}</div>
         <div class="order-info">
           <h5>${o.name}</h5>
-          <span>${o.status.toUpperCase()} · ${o.timestamp}</span>
+          <span>${(o.status || 'preparing').toUpperCase()} · ₹${o.totalPrice || o.price}</span>
         </div>
+        <div class="status-dot ${(o.status || 'preparing')}"></div>
       </div>
     `).join('') || '<div class="empty">No food orders.</div>';
   }
 }
 
 // ── SOCKET HANDLERS ──────────────────────────────────────────
-socket.on('match_update', data => {
-  if (data) {
-    const hn = document.getElementById('homeName');
-    if(hn) hn.textContent = data.homeTeam;
-    const an = document.getElementById('awayName');
-    if(an) an.textContent = data.awayTeam;
-    const hs = document.getElementById('homeScore');
-    if(hs) hs.textContent = data.homeScore;
-    const as = document.getElementById('awayScore');
-    if(as) as.textContent = data.awayScore;
+socket.on('match_update', data => updateMatchUI(data));
+socket.on('order_update', order => {
+  const existing = myOrders.find(o => o.id === order.id);
+  if (existing) {
+    existing.status = order.status;
+    localStorage.setItem('venue_orders', JSON.stringify(myOrders));
+    if(!document.getElementById('tab-orders').hidden) renderOrders();
   }
 });
+
+function updateMatchUI(data) {
+  if(!data) return;
+  const hN = document.getElementById('homeName'); if(hN) hN.textContent = data.homeTeam;
+  const aN = document.getElementById('awayName'); if(aN) aN.textContent = data.awayTeam;
+  const hS = document.getElementById('homeScore'); if(hS) hS.textContent = data.homeScore;
+  const aS = document.getElementById('awayScore'); if(aS) aS.textContent = data.awayScore;
+}
