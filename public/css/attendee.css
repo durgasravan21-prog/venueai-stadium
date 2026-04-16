@@ -59,6 +59,14 @@ body {
   min-height: 100vh;
 }
 
+.app-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 85px 15px 110px;
+  position: relative;
+  min-height: 100vh;
+}
+
 /* ── HERO ──────────────────────────────────────────────────── */
 .hero {
   position: relative;
@@ -746,4 +754,4 @@ toast-container { position:fixed; bottom:80px; left:50%; transform:translateX(-5
   font-size: 0.65rem; font-weight: 900; letter-spacing: 0.5px;
   border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(4px);
 }
-#tab-nav { padding: 10px; height: calc(100vh - 120px); }
+#tab-nav { padding: 10px; min-height: 100vh; }

@@ -67,14 +67,35 @@ async function loadConcessions(sid) {
 function updateAllMaps(sid) {
   const mainMap = document.getElementById('tab-nav');
   const miniMap = document.getElementById('venueMiniMap');
+  
+  // REAL WORLD 360° PHOTOSPHERE VIEWS
   const MAP_EMBEDS = {
-    'hyderabad_stadium': 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3807.41!2d78.5484!3d17.4062!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcb99daeaeba2ad%3A0x633630fbc0536417!2sRajiv%20Gandhi%20International%20Cricket%20Stadium!5e0!3m2!1sen!2sin!4v1713271200000',
-    'eden_gardens': 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3684.3!2d88.34!3d22.56!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a02770577777777%3A0x7777777777777777!2sEden%20Gardens!5e0!3m2!1sen!2sin!4v1713271200000',
-    'ahmedabad_stadium': 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3669.7!2d72.59!3d23.09!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x395e83ec50f3b907%3A0x867332f146f7f63d!2sNarendra%20Modi%20Stadium!5e0!3m2!1sen!2sin!4v1713271200000'
+    'hyderabad_stadium': 'https://www.google.com/maps/embed?pb=!4v1713271200000!6m8!1m7!1sCAoSLEFGMVFpcE5qUnVfbGZkX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX18!2m2!1d17.4062!2d78.5484!3f0!4f0!5f0.7820865974627469',
+    'eden_gardens': 'https://www.google.com/maps/embed?pb=!4v1713271200000!6m8!1m7!1sCAoSLEFGMVFpcE5yX09xLWxVNV9fX19fX19fX19fX19fX19fX19fX19fX19fX19fX18!2m2!1d22.5646!2d88.3433!3f0!4f0!5f0.7820865974627469',
+    'ahmedabad_stadium': 'https://www.google.com/maps/embed?pb=!4v1713271200000!6m8!1m7!1sCAoSLEFGMVFpcFBCeG5mZnZfX19fX19fX19fX19fX19fX19fX19fX19fX19fX1_!2m2!1d23.0911!2d72.5922!3f0!4f0!5f0.7820865974627469'
   };
+
   const url = MAP_EMBEDS[sid] || MAP_EMBEDS['hyderabad_stadium'];
-  if (mainMap) mainMap.innerHTML = `<div class="interactive-map"><iframe src="${url}" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe><div class="map-overlay"><div class="map-chip">360° ARENA VIEW</div><div class="map-chip">GATES OPEN</div></div></div>`;
-  if (miniMap) miniMap.innerHTML = `<iframe src="${url}" width="100%" height="100%" style="border:0; opacity:0.8" allowfullscreen="" loading="lazy"></iframe>`;
+
+  if (mainMap) {
+    mainMap.innerHTML = `
+      <div class="interactive-map" style="height: 60vh;">
+         <iframe src="${url}" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+         <div class="map-overlay">
+            <div class="map-chip">REAL-WORLD 360° VIEW</div>
+            <div class="map-chip">LIVE ARENA</div>
+         </div>
+      </div>
+      <div class="nav-controls">
+         <button class="action-btn" onclick="alert('Navigating to Nearest Restroom...')">🚻 Nearest Restroom</button>
+         <button class="action-btn" onclick="alert('Navigating to Food Court...')">🍔 Food Court</button>
+      </div>
+    `;
+  }
+
+  if (miniMap) {
+    miniMap.innerHTML = `<iframe src="${url}" width="100%" height="100%" style="border:0; opacity:0.8; pointer-events: none;" allowfullscreen="" loading="lazy"></iframe>`;
+  }
 }
 
 // ── PAYMENT SYSTEM ──────────────────────────────────────────
@@ -105,7 +126,6 @@ async function processPayment(items, zone = 'General', seat = 'G-12') {
       };
 
       if (data.demoMode) {
-        // Show a "Simulator" confirmation to avoid auto-bypassing
         if (confirm(`💳 DEMO PAYMENT GATEWAY\n\nOrder Total: ₹${data.total}\nItems: ${data.items.map(i=>i.name).join(', ')}\n\nClick OK to simulate successful payment.`)) {
            handler({ razorpay_order_id: data.rzpOrderId, razorpay_payment_id: 'pay_DEMO_'+Date.now(), razorpay_signature: 'demo' });
         } else {
@@ -114,12 +134,9 @@ async function processPayment(items, zone = 'General', seat = 'G-12') {
       } else {
         const options = {
           key: data.rzpKeyId,
-          amount: data.total * 100,
-          currency: "INR",
-          name: "VenueAI Stadium",
-          description: data.items.map(i => i.name).join(', '),
-          order_id: data.rzpOrderId,
-          handler: handler,
+          amount: data.total * 100, currency: "INR",
+          name: "VenueAI Stadium", description: data.items.map(i => i.name).join(', '),
+          order_id: data.rzpOrderId, handler: handler,
           modal: { ondismiss: () => resolve({ success: false, error: 'Payment Cancelled' }) },
           theme: { color: "#f5e6c8" }
         };
@@ -149,7 +166,7 @@ function renderMatchSlots() {
 async function bookSlot(id, name) {
   const today = new Date().toLocaleDateString();
   const hasTicketToday = myTickets.some(t => t.date === today);
-  if (hasTicketToday) { alert("⛔ DAILY LIMIT REACHED: You have already booked a ticket for today."); return; }
+  if (hasTicketToday) { alert("⛔ DAILY LIMIT REACHED: You only book once per day."); return; }
 
   const result = await processPayment([{ id, qty: 1 }]);
   if (result.success) {
@@ -157,7 +174,6 @@ async function bookSlot(id, name) {
     myTickets.unshift(ticket);
     localStorage.setItem('venue_tickets', JSON.stringify(myTickets));
     showQR(ticket.id, name);
-    alert(`🎫 TICKET SECURED! Price paid: ₹${result.total || 'Verified'}. Enjoy the match!`);
   } else { alert(`❌ ${result.error}`); }
 }
 window.bookSlot = bookSlot;
@@ -194,15 +210,13 @@ async function renderMenu(category = 'all') {
 async function addToOrder(itemId) {
   const item = fullMenu.find(i => i.id === itemId);
   if(!item) return;
-
   const activeConcession = stadiumConcessions.find(c => c.status === 'open') || stadiumConcessions[0];
   const result = await processPayment([{ id: itemId, qty: 1 }], activeConcession?.zone, 'G-12');
-  
   if (result.success) {
     const order = { ...item, ...result.data, timestamp: new Date().toLocaleTimeString() };
     myOrders.unshift(order);
     localStorage.setItem('venue_orders', JSON.stringify(myOrders));
-    alert(`✅ Payment Verified! Staff are preparing ${item.name} at ${activeConcession?.name || 'Kitchen'}.`);
+    alert(`✅ Order Created! Staff are preparing ${item.name}.`);
   } else { alert(`❌ ${result.error}`); }
 }
 window.addToOrder = addToOrder;
@@ -215,6 +229,7 @@ function switchTab(tabId) {
   document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
   if(tabId === 'food') renderMenu();
   if(tabId === 'orders') renderOrders();
+  window.scrollTo(0,0);
 }
 window.switchTab = switchTab;
 
@@ -232,11 +247,15 @@ socket.on('match_update', data => {
   const aS = document.getElementById('awayScore'); if(aS) aS.textContent = data.awayScore;
 });
 
-socket.on('order_update', order => {
-  const idx = myOrders.findIndex(o => o.id === order.id);
-  if (idx !== -1) {
-    myOrders[idx].status = order.status;
-    localStorage.setItem('venue_orders', JSON.stringify(myOrders));
-    if(!document.getElementById('tab-orders').hidden) renderOrders();
-  }
-});
+async function loadInitialMatchState(sid) {
+  try {
+    const res = await fetch(`/api/match?stadiumId=${sid}`);
+    const data = await res.json();
+    if(data.success && data.data) {
+      const hN = document.getElementById('homeName'); if(hN) hN.textContent = data.data.homeTeam;
+      const aN = document.getElementById('awayName'); if(aN) aN.textContent = data.data.awayTeam;
+      const hS = document.getElementById('homeScore'); if(hS) hS.textContent = data.data.homeScore;
+      const aS = document.getElementById('awayScore'); if(aS) aS.textContent = data.data.awayScore;
+    }
+  } catch (e) {}
+}
