@@ -700,3 +700,50 @@ toast-container { position:fixed; bottom:80px; left:50%; transform:translateX(-5
 .auth-footer {
   margin-top: 1.5rem; font-size: 0.85rem; color: var(--text-muted);
 }
+
+/* ── NAV & POI ── */
+.nav-visual {
+  position: relative; width: 100%; border-radius: var(--radius);
+  background: var(--felt-gradient); border: 3px solid var(--leather-tan);
+  aspect-ratio: 4/5; overflow: hidden; box-shadow: var(--shadow-deep);
+  margin-top: 10px;
+}
+.stadium-blueprint {
+  position: relative; width: 100%; height: 100%;
+  background-image: 
+    radial-gradient(circle at 50% 50%, transparent 40%, rgba(0,0,0,0.6) 100%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 40px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 40px);
+}
+.poi { 
+  position: absolute; font-size: 1.5rem; 
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.8)); cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.poi:hover { transform: scale(1.2); }
+.poi.highlight { animation: bounce 2s infinite; z-index: 10; font-size: 2rem; }
+@keyframes bounce { 0%,100% {transform:translateY(0)} 50% {transform:translateY(-10px)} }
+
+.nav-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+
+/* ── QR MODAL ── */
+#qrModal .selection-card { background: var(--leather-dark); border: 2px solid var(--leather-tan); }
+.qr-trigger { 
+  background: var(--gold-gradient); color: #000; font-size: 0.7rem; 
+  font-weight: 900; padding: 4px 8px; border-radius: 4px; box-shadow: var(--shadow-btn);
+}
+
+.stadium-map-container {
+  height: 180px; border-radius: var(--radius); overflow: hidden;
+  position: relative; border: 2px solid var(--border-color);
+  margin-top: 10px;
+}
+.map-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+}
+.map-btn {
+  background: var(--metal-gradient); color: var(--text-primary);
+  border: 1px solid var(--metal-shine); padding: 8px 16px; border-radius: 20px;
+  font-size: 0.8rem; font-weight: 700; box-shadow: var(--shadow-btn);
+}
