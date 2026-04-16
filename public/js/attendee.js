@@ -88,36 +88,41 @@ async function processPayment(items, zone = 'General', seat = 'G-12') {
     const { data } = await res.json();
     
     return new Promise((resolve) => {
-      const options = {
-        key: data.rzpKeyId,
-        amount: data.total * 100,
-        currency: "INR",
-        name: "VenueAI Stadium",
-        description: data.items.map(i => i.name).join(', '),
-        order_id: data.rzpOrderId,
-        handler: async (response) => {
-          const verifyRes = await fetch(`/api/payment/verify?stadiumId=${currentStadiumId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pendingRef: data.pendingRef,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              demoSuccess: data.demoMode
-            })
-          });
-          const verifyData = await verifyRes.json();
-          resolve(verifyData);
-        },
-        modal: { ondismiss: () => resolve({ success: false, error: 'Payment Cancelled' }) },
-        theme: { color: "#f5e6c8" }
+      const handler = async (response) => {
+        const verifyRes = await fetch(`/api/payment/verify?stadiumId=${currentStadiumId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pendingRef: data.pendingRef,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+            demoSuccess: data.demoMode
+          })
+        });
+        const verifyData = await verifyRes.json();
+        resolve(verifyData);
       };
 
       if (data.demoMode) {
-        // Automatically simulate success in demo mode
-        setTimeout(() => options.handler({ razorpay_order_id: data.rzpOrderId, razorpay_payment_id: 'pay_DEMO_'+Date.now(), razorpay_signature: 'demo' }), 1000);
+        // Show a "Simulator" confirmation to avoid auto-bypassing
+        if (confirm(`💳 DEMO PAYMENT GATEWAY\n\nOrder Total: ₹${data.total}\nItems: ${data.items.map(i=>i.name).join(', ')}\n\nClick OK to simulate successful payment.`)) {
+           handler({ razorpay_order_id: data.rzpOrderId, razorpay_payment_id: 'pay_DEMO_'+Date.now(), razorpay_signature: 'demo' });
+        } else {
+           resolve({ success: false, error: 'Payment Cancelled' });
+        }
       } else {
+        const options = {
+          key: data.rzpKeyId,
+          amount: data.total * 100,
+          currency: "INR",
+          name: "VenueAI Stadium",
+          description: data.items.map(i => i.name).join(', '),
+          order_id: data.rzpOrderId,
+          handler: handler,
+          modal: { ondismiss: () => resolve({ success: false, error: 'Payment Cancelled' }) },
+          theme: { color: "#f5e6c8" }
+        };
         const rzp = new Razorpay(options);
         rzp.open();
       }
@@ -152,6 +157,7 @@ async function bookSlot(id, name) {
     myTickets.unshift(ticket);
     localStorage.setItem('venue_tickets', JSON.stringify(myTickets));
     showQR(ticket.id, name);
+    alert(`🎫 TICKET SECURED! Price paid: ₹${result.total || 'Verified'}. Enjoy the match!`);
   } else { alert(`❌ ${result.error}`); }
 }
 window.bookSlot = bookSlot;
@@ -196,7 +202,7 @@ async function addToOrder(itemId) {
     const order = { ...item, ...result.data, timestamp: new Date().toLocaleTimeString() };
     myOrders.unshift(order);
     localStorage.setItem('venue_orders', JSON.stringify(myOrders));
-    alert(`✅ Order Created! Staff are preparing ${item.name}.`);
+    alert(`✅ Payment Verified! Staff are preparing ${item.name} at ${activeConcession?.name || 'Kitchen'}.`);
   } else { alert(`❌ ${result.error}`); }
 }
 window.addToOrder = addToOrder;
