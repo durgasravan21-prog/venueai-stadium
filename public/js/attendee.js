@@ -253,18 +253,18 @@ async function loadStadiums() {
 
 function renderStadiumList() {
   const grid = document.getElementById('stadiumGrid');
-  const dropdown = document.getElementById('stadiumSelectDropdown');
-  
   if (grid) {
     grid.innerHTML = activeStadiums.map(s => `
       <div class="stadium-card" onclick="enterStadium('${s.id}')">
-        <h4>${s.name}</h4>
-        <p>${s.city}, ${s.country}</p>
-        <div style="font-size:0.6rem; margin-top:5px; color:var(--amber)">${s.sport.toUpperCase()}</div>
+        <div class="stadium-card-image">🏟️</div>
+        <div class="stadium-card-info">
+          <h4>${s.name}</h4>
+          <p>${s.city}, ${s.country}</p>
+          <span class="sport-tag">${s.sport.toUpperCase()}</span>
+        </div>
       </div>
     `).join('');
   }
-
   if (dropdown) {
     const existingOptions = `<option value="" disabled selected>— Choose your stadium —</option>`;
     dropdown.innerHTML = existingOptions + activeStadiums.map(s => `

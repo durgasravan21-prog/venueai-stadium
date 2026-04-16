@@ -452,6 +452,54 @@ toast-container { position:fixed; bottom:80px; left:50%; transform:translateX(-5
   padding: 12px;
 }
 
+/* ── STADIUM SELECTION: List & Grid ──────────────────────── */
+.stadium-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 8px;
+  margin-top: 1.5rem;
+}
+
+.stadium-card {
+  display: flex;
+  align-items: center;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: left;
+}
+
+.stadium-card:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: var(--leather-tan);
+  transform: translateX(5px);
+}
+
+.stadium-card-image {
+  width: 50px; height: 50px;
+  background: var(--gold-gradient);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem; margin-right: 16px;
+  box-shadow: var(--shadow-bevel);
+}
+
+.stadium-card-info h4 { margin:0; font-size: 1rem; color: var(--leather-cream); }
+.stadium-card-info p { margin:0; font-size: 0.8rem; color: var(--text-muted); }
+
+.sport-tag {
+  display: inline-block; margin-top: 4px; padding: 2px 8px;
+  background: rgba(245,158,11,0.1); color: var(--amber);
+  border-radius: 4px; font-size: 0.65rem; font-weight: 800;
+  text-transform: uppercase;
+}
+
 /* ── AUTH UI: Glassmorphism & Skeuomorphic Hybrid ──────────────── */
 .glass-overlay {
   position: fixed; inset: 0; z-index: 9000;

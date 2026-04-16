@@ -381,6 +381,12 @@ const DAILY_MATCH_SCHEDULE = {
     { sid: 'ahmedabad_stadium', home: 'GT (Titans)', away: 'SRH (Sunrisers)', sport: 'cricket', name: 'Narendra Modi Stadium' },
     { sid: 'wankhede', home: 'MI (Indians)', away: 'LSG (Giants)', sport: 'cricket', name: 'Wankhede Stadium' },
     { sid: 'delhi_stadium', home: 'DC (Capitals)', away: 'PBKS (Kings)', sport: 'cricket', name: 'Arun Jaitley Stadium' }
+  ],
+  '2026-04-16': [
+    { sid: 'hyderabad_stadium', home: 'SRH (Sunrisers)', away: 'MI (Indians)', sport: 'cricket', name: 'Rajiv Gandhi Intl Stadium' },
+    { sid: 'eden_gardens', home: 'KKR (Knights)', away: 'RR (Royals)', sport: 'cricket', name: 'Eden Gardens' },
+    { sid: 'wembley', home: 'Liverpool', away: 'Chelsea', sport: 'football', name: 'Wembley Stadium' },
+    { sid: 'msg', home: 'Lakers', away: 'Nets', sport: 'basketball', name: 'Madison Square Garden' }
   ]
 };
 
