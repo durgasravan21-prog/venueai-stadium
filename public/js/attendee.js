@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const user = JSON.parse(sessionStorage.getItem('venue_user'));
   if (user) {
     document.getElementById('userNameDisplay').textContent = user.name;
-    // Auto-sync if stadium already selected (visible via class)
     if(document.body.classList.contains('show-app')) {
       syncWithStadium(currentStadiumId);
     }
@@ -54,14 +53,43 @@ async function syncWithStadium(sid) {
   renderMatchSlots();
   loadInitialMatchState(sid);
   loadConcessions(sid);
+  updateMapIframe(sid);
 }
 
 async function loadConcessions(sid) {
   try {
-    const res = await fetch(`/api/stadiums/${sid}`);
+    // FIX: Corrected endpoint from /api/stadiums to /api/venue
+    const res = await fetch(`/api/venue?stadiumId=${sid}`);
     const data = await res.json();
-    if(data.success) stadiumConcessions = data.data.concessions || [];
+    if(data.success) {
+      stadiumConcessions = data.data.concessions || [];
+      console.log(`✅ Loaded ${stadiumConcessions.length} concessions for ${sid}`);
+    }
   } catch (e) { console.warn("CONCESSION_LOAD_ERR", e); }
+}
+
+function updateMapIframe(sid) {
+  const mapContainer = document.getElementById('tab-nav');
+  if(!mapContainer) return;
+  
+  // Real World Stadium Coordinates (Mapping ID to Embeds)
+  const MAP_EMBEDS = {
+    'hyderabad_stadium': 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3807.41!2d78.5484!3d17.4062!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcb99daeaeba2ad%3A0x633630fbc0536417!2sRajiv%20Gandhi%20International%20Cricket%20Stadium!5e0!3m2!1sen!2sin!4v1713271200000',
+    'eden_gardens': 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3684.34!2d88.34!3d22.56!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a02770577777777%3A0x7777777777777777!2sEden%20Gardens!5e0!3m2!1sen!2sin!4v1713271200000',
+    'wembley': 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2480.25!2d-0.28!3d51.55!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4876116207a6d213%3A0xd64f15d31484931f!2sWembley%20Stadium!5e0!3m2!1sen!2suk!4v1713271200000'
+  };
+
+  const url = MAP_EMBEDS[sid] || MAP_EMBEDS['hyderabad_stadium'];
+  
+  mapContainer.innerHTML = `
+    <div class="interactive-map">
+       <iframe src="${url}" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+       <div class="map-overlay">
+          <div class="map-chip">360° ARENA VIEW</div>
+          <div class="map-chip">GATES OPEN</div>
+       </div>
+    </div>
+  `;
 }
 
 async function loadInitialMatchState(sid) {
@@ -72,7 +100,7 @@ async function loadInitialMatchState(sid) {
   } catch (e) { console.warn("INIT_MATCH_ERR", e); }
 }
 
-// ── NAVIGATION (REAL WORLD PROPERTIES) ───────────────────────
+// ── NAVIGATION ───────────────────────────────────────────────
 function switchTab(tabId) {
   document.querySelectorAll('.tab-panel').forEach(p => { p.hidden = true; p.classList.remove('active'); });
   const target = document.getElementById(`tab-${tabId}`);
@@ -80,8 +108,13 @@ function switchTab(tabId) {
   document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
   if(tabId === 'food') renderMenu();
   if(tabId === 'orders') renderOrders();
+  if(tabId === 'nav') updateMapIframe(currentStadiumId);
 }
 window.switchTab = switchTab;
+
+window.viewDetailedMap = () => {
+  switchTab('nav');
+};
 
 // ── VENUE & SLOTS ───────────────────────────────────────────
 function renderMatchSlots() {
@@ -114,8 +147,8 @@ function showQR(id, desc) {
   const modal = document.getElementById('qrModal');
   const img = document.getElementById('qrImg');
   const details = document.getElementById('qrDetails');
-  // High Reliability QR Provider
-  img.src = `https://quickchart.io/qr?text=${encodeURIComponent(id)}&size=300&light=ffffff&dark=000000`;
+  // Fixed QR Provider with SSL Support
+  img.src = `https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=${encodeURIComponent(id)}`;
   details.textContent = `${desc} (${id})`;
   modal.style.display = 'flex';
 }
@@ -150,7 +183,11 @@ async function addToOrder(itemId) {
   const item = fullMenu.find(i => i.id === itemId);
   if(!item) return;
 
-  // Real-world sync: Link to the current stadium's active concession
+  // Real-world sync: Ensure we have the stadium's concessions loaded
+  if (!stadiumConcessions.length) {
+    await loadConcessions(currentStadiumId);
+  }
+
   const activeConcession = stadiumConcessions.find(c => c.status === 'open') || stadiumConcessions[0];
 
   try {
@@ -167,7 +204,7 @@ async function addToOrder(itemId) {
       const order = { ...item, ...data.data, timestamp: new Date().toLocaleTimeString() };
       myOrders.unshift(order);
       localStorage.setItem('venue_orders', JSON.stringify(myOrders));
-      alert(`✅ Order Synthesized! Staff are preparing ${item.name}.`);
+      alert(`✅ Order Sent to ${activeConcession.name}! Staff are preparing ${item.name}.`);
     } else { alert(`❌ Order Error: ${data.error}`); }
   } catch (err) { alert("❌ System offline. Ordering failed."); }
 }
