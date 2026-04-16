@@ -19,16 +19,15 @@ try {
 
 // ── BOOT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  console.log("🚀 Reality Engine Cold Booted. Awaiting Auth Shield...");
+  
+  // Clean initialization - visibility is handled by index.html auth guard
   const user = sessionStorage.getItem('venue_user');
   if (user) {
     const data = JSON.parse(user);
     const display = document.getElementById('userNameDisplay');
     if (display) display.textContent = data.name.split(' ')[0];
   }
-  
-  // Connect to live data if stadium pre-selected
-  const savedSid = localStorage.getItem('venue_stadium_id');
-  if (savedSid) enterStadium(savedSid);
 });
 
 // ── NAVIGATION (Fixed Recursion) ─────────────────────────────
@@ -98,6 +97,14 @@ async function loadStadiums() {
 window.loadStadiums = loadStadiums;
 
 function enterStadium(sid) {
+  // 🛡️ AUTH SHIELD
+  if (!sessionStorage.getItem('venue_user')) {
+    console.warn("⛔ ACCESS DENIED: Unauthenticated entry attempt blocked.");
+    const authLayer = document.getElementById('authOverlay');
+    if(authLayer) authLayer.style.display = 'flex';
+    return;
+  }
+
   console.log(`🏟️ Syncing with Stadium: ${sid}`);
   currentStadiumId = sid;
   localStorage.setItem('venue_stadium_id', sid);

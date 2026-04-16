@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="VenueAI — Smart Stadium Experience. Book entry, order food, navigate with AI assistance.">
   <meta name="theme-color" content="#1a4a2e">
+  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests; img-src * data: blob:; default-src * 'unsafe-inline' 'unsafe-eval';">
   <title>VenueAI — Smart Stadium Experience</title>
-  
+
   <!-- 🛡️ Alert Interceptor -->
   <script>
     const _baseAlert = window.alert;
@@ -69,7 +70,7 @@
       signInWithEmailAndPassword(auth, e, p).then(() => location.reload()).catch(err => alert(err.message));
     };
 
-    // Global Flow Guard
+    // Global Flow Guard (Updated: Strict Selection)
     onAuthStateChanged(auth, (user) => {
       const authLayer = document.getElementById('authOverlay');
       const selectionLayer = document.getElementById('stadiumSelectorOverlay');
@@ -79,16 +80,11 @@
         sessionStorage.setItem('venue_user', JSON.stringify({ name: user.displayName || 'Guest', email: user.email }));
         authLayer.style.display = 'none';
         
-        const sid = localStorage.getItem('venue_stadium_id');
-        if (sid) {
-          selectionLayer.style.display = 'none';
-          appLayer.style.display = 'block';
-          if (window.enterStadium) window.enterStadium(sid);
-        } else {
-          selectionLayer.style.display = 'flex';
-          appLayer.style.display = 'none';
-          if (window.loadStadiums) window.loadStadiums();
-        }
+        // 🔒 MANDATORY SELECTION: Show Choice Screen first
+        selectionLayer.style.display = 'flex';
+        appLayer.style.display = 'none';
+        
+        if (window.loadStadiums) window.loadStadiums();
       } else {
         authLayer.style.display = 'flex';
         selectionLayer.style.display = 'none';
