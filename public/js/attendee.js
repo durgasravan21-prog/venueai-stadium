@@ -100,8 +100,7 @@ function enterStadium(sid) {
   // 🛡️ AUTH SHIELD
   if (!sessionStorage.getItem('venue_user')) {
     console.warn("⛔ ACCESS DENIED: Unauthenticated entry attempt blocked.");
-    const authLayer = document.getElementById('authOverlay');
-    if(authLayer) authLayer.style.display = 'flex';
+    location.reload(); 
     return;
   }
 
@@ -109,11 +108,9 @@ function enterStadium(sid) {
   currentStadiumId = sid;
   localStorage.setItem('venue_stadium_id', sid);
   
-  // Hide UI layers
-  const selection = document.getElementById('stadiumSelectorOverlay');
-  const mainApp = document.getElementById('mainContent');
-  if(selection) selection.style.display = 'none';
-  if(mainApp) mainApp.style.display = 'block';
+  // 🔓 STRICT REVEAL
+  document.body.classList.remove('show-selection');
+  document.body.classList.add('show-app');
 
   // Join Socket Room
   socket.emit('join_stadium', sid);

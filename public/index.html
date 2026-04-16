@@ -3,34 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="VenueAI — Smart Stadium Experience. Book entry, order food, navigate with AI assistance.">
-  <meta name="theme-color" content="#1a4a2e">
+  <meta name="description" content="VenueAI — Smart Stadium Experience. Secure Authentication First.">
   <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests; img-src * data: blob:; default-src * 'unsafe-inline' 'unsafe-eval';">
-  <title>VenueAI — Smart Stadium Experience</title>
+  <title>VenueAI — Secure Smart Stadium</title>
+  
+  <style>
+    /* 🛡️ THE STRIKT SHIELD: Mandatory Initial Stealth */
+    #app-bootloader {
+      position: fixed; inset: 0; z-index: 99999;
+      background: #0d1a10; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transition: opacity 0.5s ease;
+    }
+    .shield-logo { font-size: 3rem; margin-bottom: 1rem; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+    .boot-text { color: #f5e6c8; font-family: sans-serif; font-weight: 800; letter-spacing: 2px; }
 
-  <!-- 🛡️ Alert Interceptor -->
-  <script>
-    const _baseAlert = window.alert;
-    window.alert = function(m) {
-      if (String(m).toLowerCase().includes('firebase') || String(m).toLowerCase().includes('appid')) {
-        console.warn("🛡️ Suppressed Alert:", m);
-        return false;
-      }
-      return _baseAlert(m);
-    };
-  </script>
+    /* Hide everything until explicitly permitted */
+    #authOverlay, #stadiumSelectorOverlay, #mainContent { display: none !important; }
+    
+    /* Reveal Classes */
+    body.show-auth #authOverlay { display: flex !important; }
+    body.show-selection #stadiumSelectorOverlay { display: flex !important; }
+    body.show-app #mainContent { display: block !important; }
+  </style>
 
-  <!-- 🌐 Official Integrations -->
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWpLY5RCECUpAdBalGwkPp0Kut3jf9c0s&libraries=places"></script>
-  <script async defer src="https://accounts.google.com/gsi/client"></script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
-  <!-- 🛠️ VenueAI Firebase Module -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
-    import { getInstallations } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-installations.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
     
     const config = { 
        apiKey: "AIzaSyBWpLY5RCECUpAdBalGwkPp0Kut3jf9c0s", 
@@ -46,7 +48,7 @@
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
 
-    // Export Auth Actions to window
+    // Export Actions
     window.vLogout = () => {
       signOut(auth).then(() => {
         sessionStorage.clear();
@@ -56,12 +58,7 @@
     };
 
     window.googleLogin = () => {
-      const btn = document.getElementById('googleLoginBtn');
-      if(btn) { btn.innerHTML = '⏳ Syncing...'; btn.disabled = true; }
-      signInWithPopup(auth, provider).then(() => location.reload()).catch(e => {
-        alert(e.message);
-        if(btn) { btn.innerHTML = 'Log in with Google'; btn.disabled = false; }
-      });
+      signInWithPopup(auth, provider).then(() => location.reload()).catch(e => alert(e.message));
     };
 
     window.handleEmailLogin = () => {
@@ -70,127 +67,93 @@
       signInWithEmailAndPassword(auth, e, p).then(() => location.reload()).catch(err => alert(err.message));
     };
 
-    // Global Flow Guard (Updated: Strict Selection)
+    // ── THE AUTH GATE (Zero Buffering) ──
     onAuthStateChanged(auth, (user) => {
-      const authLayer = document.getElementById('authOverlay');
-      const selectionLayer = document.getElementById('stadiumSelectorOverlay');
-      const appLayer = document.getElementById('mainContent');
+      const bootloader = document.getElementById('app-bootloader');
+      
+      // Clear previous states
+      document.body.classList.remove('show-auth', 'show-selection', 'show-app');
 
       if (user) {
         sessionStorage.setItem('venue_user', JSON.stringify({ name: user.displayName || 'Guest', email: user.email }));
-        authLayer.style.display = 'none';
-        
-        // 🔒 MANDATORY SELECTION: Show Choice Screen first
-        selectionLayer.style.display = 'flex';
-        appLayer.style.display = 'none';
-        
+        document.body.classList.add('show-selection');
         if (window.loadStadiums) window.loadStadiums();
       } else {
-        authLayer.style.display = 'flex';
-        selectionLayer.style.display = 'none';
-        appLayer.style.display = 'none';
+        document.body.classList.add('show-auth');
       }
-    });
 
-    // Lazy load analytics
-    setTimeout(() => { try { getInstallations(app); getAnalytics(app); } catch(e){} }, 2000);
+      // Kill Bootloader
+      setTimeout(() => {
+        bootloader.style.opacity = '0';
+        setTimeout(() => bootloader.style.display = 'none', 500);
+      }, 800);
+    });
   </script>
 
-  <!-- Styles -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/attendee.css?v=2.3">
+  <link rel="stylesheet" href="/css/attendee.css?v=2.4">
 </head>
 <body>
 
+<!-- 🧬 THE SHIELD (Blocks everything during Auth Handshake) -->
+<div id="app-bootloader">
+  <div class="shield-logo">🛡️</div>
+  <div class="boot-text">SECURE GATEWAY...</div>
+</div>
+
 <div id="app">
-  <!-- 1. AUTH LAYER -->
+  <!-- AUTH -->
   <div id="authOverlay" class="glass-overlay">
     <div class="auth-card">
       <div class="auth-logo">🏟️ VenueAI</div>
-      <h2 id="authTitle">Smart Stadium Entry</h2>
-      
+      <h2>Identity Verification</h2>
       <div class="auth-form">
         <button id="googleLoginBtn" class="google-btn" onclick="googleLogin()">
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="">
-          Log in with Google
+          Login with Google
         </button>
-        <div class="divider">OR SECURE LOGIN</div>
-        <input type="email" id="authEmail" placeholder="Email Address">
+        <div class="divider">OR USE CREDENTIALS</div>
+        <input type="email" id="authEmail" placeholder="Email">
         <input type="password" id="authPassword" placeholder="Password">
-        <button class="action-btn primary" onclick="handleEmailLogin()">Enter Ground</button>
+        <button class="action-btn primary" onclick="handleEmailLogin()">Verify & Enter</button>
       </div>
     </div>
   </div>
 
-  <!-- 2. STADIUM SELECTOR -->
-  <div id="stadiumSelectorOverlay" class="glass-overlay" style="display:none">
+  <!-- SELECTION -->
+  <div id="stadiumSelectorOverlay" class="glass-overlay">
     <div class="selection-card">
-      <h2>Enter Your Stadium</h2>
-      <p class="subtitle">Select your venue to sync real-time experience</p>
-      <div id="stadiumGrid" class="stadium-grid">
-        <div class="loading">Finding venues...</div>
-      </div>
+      <h2>Select Your Venue</h2>
+      <div id="stadiumGrid" class="stadium-grid"></div>
     </div>
   </div>
 
-  <!-- 3. MAIN APP -->
-  <main id="mainContent" class="app-container" style="display:none">
+  <!-- APP (ONLY REVEALED ENTIRELY AFTER SELECTION) -->
+  <main id="mainContent" class="app-container">
     <header class="top-nav">
-      <div class="user-info" onclick="vLogout()" title="Click to Logout">
+      <div class="user-info" onclick="vLogout()">
         <span class="user-name" id="userNameDisplay">Guest</span>
-        <span class="user-status">🟢 Verified</span>
+        <span class="user-status">🟢 AUTHENTICATED</span>
       </div>
-      <div class="stadium-name-badge" id="currentStadiumName">VenueAI Stadium</div>
+      <div id="currentStadiumName" class="stadium-name-badge">VenueAI</div>
     </header>
 
-    <!-- CONTENT TABS -->
+    <!-- Content Sections -->
     <section id="tab-venue" class="tab-panel active">
       <div class="live-match-card">
         <div class="match-teams">
-          <div class="team"><span id="homeName">HOME</span><div class="score" id="homeScore">0</div></div>
+          <div class="team"><span id="homeName">-</span><div class="score" id="homeScore">0</div></div>
           <div class="vs">VS</div>
-          <div class="team"><span id="awayName">AWAY</span><div class="score" id="awayScore">0</div></div>
-        </div>
-        <div class="match-meta">
-          <span id="matchStatus">READY</span> · <span id="matchClock">00'</span>
+          <div class="team"><span id="awayName">-</span><div class="score" id="awayScore">0</div></div>
         </div>
       </div>
-
-      <div class="section-title">Book Entry Slot</div>
-      <div id="slotsGrid" class="slots-grid">
-        <!-- Dyn Load -->
-      </div>
-      
-      <div class="stadium-map-container">
-         <div id="stadiumMap"></div>
-      </div>
+      <div class="section-title">Reserved Entry Slots</div>
+      <div id="slotsGrid" class="slots-grid"></div>
     </section>
 
-    <section id="tab-food" class="tab-panel" hidden>
-      <div class="section-title">Digital Food Court</div>
-      <div id="menuGrid" class="menu-grid"></div>
-    </section>
+    <section id="tab-food" class="tab-panel" hidden><div id="menuGrid" class="menu-grid"></div></section>
+    <section id="tab-nav" class="tab-panel" hidden><div id="stadiumMap"></div></section>
+    <section id="tab-orders" class="tab-panel" hidden><div id="orderList" class="order-list"></div></section>
 
-    <section id="tab-nav" class="tab-panel" hidden>
-      <div class="section-title">AI Wayfinding</div>
-      <div class="nav-interface">
-        <select id="navDestination">
-           <option value="seat">My Seat</option>
-           <option value="gate">Nearest Gate</option>
-           <option value="food">Food Court</option>
-        </select>
-        <button class="action-btn primary" onclick="getRoute()">Find Route</button>
-      </div>
-    </section>
-
-    <section id="tab-orders" class="tab-panel" hidden>
-      <div class="section-title">My Orders</div>
-      <div id="orderList" class="order-list"></div>
-    </section>
-
-    <!-- BOTTOM BAR -->
     <nav class="bottom-bar">
       <button class="nav-item active" data-tab="venue" onclick="switchTab('venue')">🏟️<span>Venue</span></button>
       <button class="nav-item" data-tab="food" onclick="switchTab('food')">🍔<span>Food</span></button>
@@ -200,7 +163,7 @@
   </main>
 </div>
 
-<script src="/js/attendee.js?v=2.3"></script>
+<script src="/js/attendee.js?v=2.4"></script>
 
 </body>
 </html>
