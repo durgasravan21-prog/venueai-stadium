@@ -86,11 +86,22 @@ function renderMatchSlots() {
 }
 
 function bookSlot(id, name) {
+  const today = new Date().toLocaleDateString();
+  
+  // 🛡️ DAILY QUOTA CHECK
+  const hasTicketToday = myTickets.some(t => t.date === today);
+  
+  if (hasTicketToday) {
+    alert("⛔ DAILY LIMIT REACHED: You have already booked a ticket for today's event. Only one booking per day is allowed.");
+    return;
+  }
+
   const ticket = {
     id: 'TKT-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
     name: name,
     type: 'ticket',
     status: 'valid',
+    date: today,
     time: new Date().toLocaleTimeString()
   };
   
