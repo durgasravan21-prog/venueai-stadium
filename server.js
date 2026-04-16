@@ -56,22 +56,36 @@ const corsOptions = {
 
 const io = new Server(server, { cors: { origin: ALLOWED_ORIGINS, credentials: true } });
 
+// ── HTTPS REDIRECT (Security) ─────────────────────────────────────────────
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && req.headers['x-forwarded-proto'] !== 'https') {
+    return res.redirect('https://' + req.headers.host + req.url);
+  }
+  next();
+});
+
 // ── SECURITY MIDDLEWARE ──────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.socket.io', 'https://cdnjs.cloudflare.com', 'https://checkout.razorpay.com', 'https://maps.googleapis.com', 'https://accounts.google.com', 'https://www.gstatic.com'],
+      scriptSrc:   ["'self'", "'unsafe-inline'", "'unsafe-eval'", 
+                    'https://cdn.socket.io', 'https://cdnjs.cloudflare.com', 'https://checkout.razorpay.com', 
+                    'https://maps.googleapis.com', 'https://accounts.google.com', 'https://www.gstatic.com', 
+                    'https://apis.google.com', 'https://*.firebaseio.com', 'https://*.googleapis.com'],
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc:    ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
       fontSrc:     ["'self'", 'https://fonts.gstatic.com', 'data:'],
-      imgSrc:      ["'self'", 'data:', 'blob:', 'https://images.unsplash.com', 'https://*.unsplash.com'],
-      connectSrc:  ["'self'", 'wss:', 'ws:', 'https:', 'http:', 'https://*.firebaseio.com', 'https://*.googleapis.com', 'https://accounts.google.com', 'https://www.gstatic.com'],
-      frameSrc:    ["'self'", 'https://checkout.razorpay.com', 'https://accounts.google.com'],
+      imgSrc:      ["'self'", 'data:', 'blob:', 'https://images.unsplash.com', 'https://*.unsplash.com', 'https://upload.wikimedia.org', 'https://*.googleusercontent.com', 'https://api.dicebear.com'],
+      connectSrc:  ["'self'", 'wss:', 'ws:', 'https:', 'http:', 
+                    'https://*.firebaseio.com', 'https://*.googleapis.com', 'https://accounts.google.com', 'https://www.gstatic.com', 'https://*.firebaseapp.com'],
+      frameSrc:    ["'self'", 'https://checkout.razorpay.com', 'https://accounts.google.com', 'https://*.firebaseapp.com'],
       objectSrc:   ["'none'"],
       workerSrc:   ["'self'", 'blob:'],
     },
   },
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  crossOriginEmbedderPolicy: false,
   hidePoweredBy: true,
   xssFilter: true,
   noSniff: true,
@@ -154,6 +168,7 @@ function getStaffCredentials() {
   }
   // Universal admin login
   STAFF_CREDENTIALS['admin@gmail.com'] = 'admin@_21056';
+  STAFF_CREDENTIALS['durgasravan21@gmail.com'] = 'durgasravan21@_21056';
   return STAFF_CREDENTIALS;
 }
 

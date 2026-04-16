@@ -71,10 +71,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('stadiumSelectorOverlay').style.display = 'none';
   }
 
+  // Init user UI
+  updateUserUI();
+
   // Auth handling moved directly to index.html for real Firebase integration
   const authBtn = document.getElementById('googleLoginBtn');
   if (authBtn) {
-    // Listener is already inside index.html for real Google Auth via window.triggerGoogleAuth
     console.log("Real Google auth ready.");
   }
   
@@ -130,7 +132,7 @@ function enterStadium(sid) {
     localStorage.setItem('venue_stadium_id', sid);
     
     // Join Room
-    if (typeof socket !== 'undefined') {
+    if (typeof socket !== 'undefined' && socket.connected) {
       socket.emit('join_stadium', sid);
     }
     
@@ -142,22 +144,45 @@ function enterStadium(sid) {
 
     if (authOverlay) authOverlay.style.display = 'none';
     if (selectorOverlay) selectorOverlay.style.display = 'none';
-    if (hero) hero.style.display = 'flex'; // Hero uses flex for centering
+    if (hero) hero.style.display = 'flex';
     if (mainContent) mainContent.style.display = 'block';
 
     // Force active tab to venue to ensure rendering
-    if (typeof switchTab === 'function') switchTab('venue');
+    switchTab('venue');
 
     // REST Fallback for immediate data
-    fetch(`/api/match?stadiumId=${sid}`)
+    fetch(`/api/stadium/${sid}`)
       .then(r => r.json())
-      .then(d => { if(d.success && typeof updateMatchUI === 'function') updateMatchUI(d.data); })
+      .then(d => { 
+        if(d.success && d.data.state) updateMatchUI(d.data.state);
+        if(d.success && d.data.venue) venueState = d.data.venue;
+      })
       .catch(e => console.error("Match fetch fallback failed:", e));
     
     fetchWeather();
   } catch (err) {
     console.error("Critical error inside enterStadium:", err);
   }
+}
+
+function updateUserUI() {
+  const userJson = sessionStorage.getItem('venue_user');
+  if (!userJson) return;
+  try {
+    const user = JSON.parse(userJson);
+    const nameEl = document.getElementById('userNameDisplay');
+    const avatarEl = document.getElementById('userAvatar');
+    if (nameEl) nameEl.textContent = user.name || user.email || 'Guest';
+    if (avatarEl && user.name) avatarEl.textContent = user.name.charAt(0).toUpperCase();
+  } catch (e) {
+    console.error("User UI Update failed:", e);
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('venue_user');
+  localStorage.removeItem('venue_stadium_id');
+  window.location.reload();
 }
 
 // ── Restore from localStorage ─────────────────────────────────

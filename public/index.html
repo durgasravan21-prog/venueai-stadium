@@ -76,7 +76,7 @@
         .catch((error) => {
           console.error("Google Auth Error:", error);
           if(btn) { btn.innerHTML = '❌ Auth Failed - Try Again'; btn.disabled = false; }
-          alert("Authentication Failed. Please check your Firebase API Keys in index.html.");
+          alert("Authentication Failed. Please ensure your Google Account is authorized and try again.");
         });
     };
   </script>
@@ -136,6 +136,12 @@
   <!-- ══ STADIUM SELECTOR ══ -->
   <div id="stadiumSelectorOverlay" class="stadium-overlay" style="display:none;">
     <div class="overlay-content">
+      <div id="userProfile" style="position: absolute; top: 20px; right: 20px; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.4); padding: 6px 12px; border-radius: 20px; border: 1px solid var(--leather-tan);">
+         <div id="userAvatar" style="width: 24px; height: 24px; border-radius: 50%; background: var(--felt-green); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800;">U</div>
+         <span id="userNameDisplay" style="font-size: 0.8rem; font-weight: 700; color: var(--walnut-cream);">Guest</span>
+         <button onclick="logout()" style="background: none; border: none; color: #ef4444; font-size: 0.7rem; cursor: pointer; text-decoration: underline;">Logout</button>
+      </div>
+
       <div class="logo-container">
         <img src="/assets/logo.png" alt="" class="brand-logo" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=VA&backgroundColor=c9973a'">
         <span class="brand-name">VenueAI <span class="gradient-text">World</span></span>
@@ -448,6 +454,18 @@
 
   </main>
 </div>
+
+<!-- Global Error Handler for Debugging -->
+<script>
+  window.onerror = function(msg, url, lineNo, columnNo, error) {
+    console.error('Global Error:', msg, 'at', url, ':', lineNo);
+    // Only show alert in non-production or for critical failures if needed
+    if (msg.toLowerCase().includes('firebase') || msg.toLowerCase().includes('google')) {
+       alert('Auth Service Alert: ' + msg);
+    }
+    return false;
+  };
+</script>
 
 <!-- Scripts -->
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
