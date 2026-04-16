@@ -32,7 +32,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
     
     const config = { 
        apiKey: "AIzaSyBWpLY5RCECUpAdBalGwkPp0Kut3jf9c0s", 
@@ -48,11 +48,14 @@
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
 
+    // 🛡️ STRENGTHEN AUTH: Force re-login on new browser session
+    setPersistence(auth, browserSessionPersistence);
+
     // Export Actions
     window.vLogout = () => {
       signOut(auth).then(() => {
         sessionStorage.clear();
-        localStorage.removeItem('venue_stadium_id');
+        localStorage.clear();
         location.reload();
       });
     };
@@ -152,7 +155,10 @@
     <div class="selection-card">
       <div class="auth-logo" style="margin-bottom:0.5rem">🏟️</div>
       <h2>Select Your Venue</h2>
-      <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:1.5rem">Authenticated: Pick a stadium to sync</p>
+      <p id="selectorUserLabel" style="color:var(--amber); font-weight:700; font-size:0.9rem; margin-bottom:0.5rem">Verifying Session...</p>
+      <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:1.5rem">
+        Click a stadium to enter · <span onclick="vLogout()" style="text-decoration:underline; cursor:pointer; color:var(--leather-tan)">Switch Account?</span>
+      </p>
       <div id="stadiumGrid" class="stadium-grid"></div>
     </div>
   </div>
