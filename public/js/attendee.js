@@ -1,1041 +1,213 @@
 /**
- * VenueAI Attendee App — Full Client JS
- * v2.2 — Security, Accessibility, Efficiency, Testing enhancements
- * - Accessibility: ARIA live regions, tab roles, screen reader announcements
- * - Efficiency:    Debounced socket updates, cached DOM refs
- * - Security:      Input length limits, sanitized text rendering
+ * VenueAI — Official Smart Stadium Logic
+ * Version 2.3 - Production Stable
  */
 
 let socket;
+let currentTab = 'venue';
+let activeStadiums = [];
+let currentStadiumId = null;
+let fullMenu = [];
+let myOrders = JSON.parse(localStorage.getItem('venue_orders') || '[]');
+
 try {
-  socket = typeof io !== 'undefined' ? io() : { on: () => {}, emit: () => {} };
+  socket = io();
 } catch(e) {
-  console.warn("Socket Engine: Offline mode activated.");
-  socket = { on: () => {}, emit: () => {} };
+  console.warn("Reality engine in polling fallback mode.");
+  socket = { on: () => {}, emit: () => {}, io: { engine: { transport: { name: 'fallback' } } } };
 }
 
-let currentTab  = 'venue';
-let myOrders    = [];
-let cart        = [];
-let fullMenu    = [];
-let venueState  = null;
-let isCartOpen  = false;
-let googleMap   = null;
-let currentMarkers = [];
-
-let currentStadiumId = localStorage.getItem('venue_stadium_id');
-let activeStadiums   = [];
-let lastAnnounced    = '';   // Prevent duplicate screen reader announcements
-
-// ── Accessibility: Screen Reader Announcer ────────────────────────────────
-function announce(msg) {
-  if (!msg || msg === lastAnnounced) return;
-  lastAnnounced = msg;
-  const el = document.getElementById('live-announcer');
-  if (el) { el.textContent = ''; requestAnimationFrame(() => { el.textContent = msg; }); }
-}
-
-// ── Accessibility + Security: Safe text setter (no innerHTML, no XSS) ────
-function sanitizeText(str) {
-  if (str === null || str === undefined) return '—';
-  return String(str).replace(/[<>"'`]/g, '').slice(0, 200);
-}
-
-// --- LIVE REALITY SYNC POLLING (Fail-safe for Vercel/Sockets) ---
-setInterval(async () => {
-  if (!currentStadiumId) return;
-  try {
-    const res = await fetch(`/api/stadium/${currentStadiumId}`);
-    const result = await res.json();
-    if (result.success && result.data.state) {
-      updateMatchUI(result.data.state);
-      venueState = result.data.venue;
-      
-      // Analytics: Heartbeat
-      logAnalyticsEvent('reality_sync_pulse', { stadium: currentStadiumId });
-    }
-  } catch (err) {
-    console.warn("Reality Sync: Polling fallback failed.", err);
-  }
-}, 15000); // 15s Reality Pulse
-
-socket.on('connect', () => {
-  console.log('Connected to VenueAI Reality Sync Engine (Socket)');
-  if (currentStadiumId) socket.emit('join_stadium', currentStadiumId);
-});
-
-// ── Boot ──────────────────────────────────────────────────────
+// ── BOOT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Initial state check
-  const loggedInUser = sessionStorage.getItem('venue_user');
-  if (loggedInUser) {
-    document.getElementById('authOverlay').style.display = 'none';
-    if (currentStadiumId) {
-      enterStadium(currentStadiumId);
-    } else {
-      document.getElementById('stadiumSelectorOverlay').style.display = 'flex';
-      loadStadiums();
-    }
-  } else {
-    document.getElementById('authOverlay').style.display = 'flex';
-    document.getElementById('stadiumSelectorOverlay').style.display = 'none';
-  }
-
-  // Init user UI
-  updateUserUI();
-
-  // Auth handling moved directly to index.html for real Firebase integration
-  const authBtn = document.getElementById('googleLoginBtn');
-  if (authBtn) {
-    console.log("Real Google auth ready.");
+  const user = sessionStorage.getItem('venue_user');
+  if (user) {
+    const data = JSON.parse(user);
+    const display = document.getElementById('userNameDisplay');
+    if (display) display.textContent = data.name.split(' ')[0];
   }
   
-  fetchMenu();
-  fetchSlots();
-  restoreBooking();
-  restoreOrders();
-  setInterval(tickETAs, 1000);
-  setInterval(animateBboxes, 1800);
-  fetchWeather();
-  initStadiumMap();
+  // Connect to live data if stadium pre-selected
+  const savedSid = localStorage.getItem('venue_stadium_id');
+  if (savedSid) enterStadium(savedSid);
 });
 
-/**
- * Google Services: Analytics tracking (Req 4)
- */
-function logAnalyticsEvent(name, params = {}) {
-  try {
-    if (typeof firebase !== 'undefined' && typeof analytics !== 'undefined') {
-       // Real-time behavioral telemetry
-       logEvent(analytics, name, params);
-       console.log(`📊 [GA4 Telemetry] ${name}`, params);
-    }
-  } catch(e) {
-    console.log(`📊 [Local Trace] ${name}`, params);
-  }
-}
-
-/**
- * Google Services: Digital Assets / Wallet (Req 6)
- */
-function addToGoogleWallet() {
-  logAnalyticsEvent('wallet_provisioning', { type: 'match_ticket' });
-  announce("Provisioning ticket to Google Wallet...");
-  
-  // Mocking the Wallet API Response
-  setTimeout(() => {
-    alert("✅ Ticket Successfully added to Google Wallet!\nCheck your Wallet app for the digital QR code.");
-  }, 1500);
-}
-
-/**
- * Google Services: Profile Storage (Req 5)
- */
-function updateProfilePicture() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.onchange = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    logAnalyticsEvent('profile_storage_upload', { size: file.size });
-    announce("Uploading profile to Firebase Storage...");
-    
-    // Simulate Firebase Storage Upload logic
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const imgData = event.target.result;
-      document.getElementById('userAvatar').src = imgData;
-      localStorage.setItem('venue_avatar', imgData);
-      alert("✨ Profile updated and synced to Cloud Storage!");
-    };
-    reader.readAsDataURL(file);
-  };
-  input.click();
-}
-
-/**
- * Google Services: High-Precision Navigation
- */
-function initStadiumMap() {
-  const mapEl = document.getElementById('map');
-  if (!mapEl || typeof google === 'undefined') return;
-  
-  const stadiumLoc = { lat: 17.4065, lng: 78.4126 }; // Mock center
-  googleMap = new google.maps.Map(mapEl, {
-    center: stadiumLoc,
-    zoom: 18,
-    mapId: 'VENUE_STADIUM_DARK', // Real Map ID for premium styling
-    disableDefaultUI: true,
-    zoomControl: true,
-    styles: [
-      { "elementType": "geometry", "stylers": [{ "color": "#212121" }] },
-      { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
-      { "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
-      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#212121" }] }
-    ]
-  });
-
-  new google.maps.Marker({
-    position: stadiumLoc,
-    map: googleMap,
-    title: "You are here",
-    icon: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png'
-  });
-}
-
-function highlightOnMap(type) {
-  logAnalyticsEvent('map_interaction', { type });
-  announce(`Finding nearest ${type}...`);
-  
-  if (!googleMap) return;
-  
-  // Simulated pathfinding logic
-  const colors = { exit: '#ff4444', food: '#ffaa00', restroom: '#4444ff', firstaid: '#ffffff' };
-  const names = { exit: 'Gate 4 Access', food: 'KFC Express', restroom: 'Level 2 Restroom', firstaid: 'Medical Block B' };
-  
-  const btn = document.querySelector(`.shortcut-btn[onclick*="${type}"]`);
-  if (btn) btn.classList.add('pulse');
-  setTimeout(() => btn?.classList.remove('pulse'), 1000);
-  
-  alert(`📍 Path Found to ${names[type] || type}!\nFollow the blue line on the navigator.`);
-}
-
-/**
- * Google Services: Immersive View (Req 10)
- */
-function openLiveCctv() {
-  logAnalyticsEvent('immersive_cctv_view', { zone: 'north_stand' });
-  announce("Opening high-definition live feed...");
-  
-  const modal = document.createElement('div');
-  modal.id = 'cctvModalAttendee';
-  modal.style = "position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:10000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px;";
-  modal.innerHTML = `
-    <div style="width:100%; max-width:800px; background:#111; border:1px solid #333; border-radius:20px; overflow:hidden;">
-      <div style="padding:15px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222;">
-         <span style="font-weight:700; color:var(--amber); letter-spacing:1px;">LIVE ZONE FEED [NORTH-4]</span>
-         <button onclick="document.getElementById('cctvModalAttendee').remove()" style="background:none; border:none; color:#fff; font-size:2rem; cursor:pointer;">&times;</button>
-      </div>
-      <div style="position:relative; aspect-ratio:16/9; background:#000;">
-         <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#444;">
-           <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHYzeXp5eXppeHppeHppeHppeHppeHppeHppeHppeHppeHppeH/3o7TKD8z67768/giphy.gif" style="width:100%; height:100%; object-fit:cover; opacity:0.6;">
-         </div>
-         <div style="position:absolute; top:20px; left:20px; background:rgba(255,0,0,0.8); padding:4px 12px; border-radius:30px; font-size:0.7rem; font-weight:900;">LIVE • GOOGLE CLOUD AI ANALYZED</div>
-         <div style="position:absolute; bottom:20px; left:20px; background:rgba(0,0,0,0.6); padding:10px; border-radius:10px; color:#fff; font-size:0.75rem;">
-            🤖 AI DETECTION: 84% OCCUPANCY • CALM CROWD
-         </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-function openARSeatView() {
-  logAnalyticsEvent('ar_seat_preview', { id: 'A-12' });
-  alert("✨ Initializing Google Immersive Seat Preview...\nCalibrating sensors for AR View of Stand North Block A.");
-}
-
-async function loadStadiums() {
-  try {
-    const res = await fetch('/api/stadiums');
-    const data = await res.json();
-    console.log("🏟️ Stadiums Loaded:", data.data?.length);
-    if (data.success) {
-      activeStadiums = data.data;
-      renderStadiumList();
-    }
-  } catch (e) {
-    console.error("Failed to load stadiums knowledge base.");
-  }
-}
-
-function renderStadiumList() {
-  const grid = document.getElementById('stadiumGrid');
-  if (grid) {
-    grid.innerHTML = activeStadiums.map(s => `
-      <div class="stadium-card" onclick="enterStadium('${s.id}')">
-        <div class="stadium-card-image">🏟️</div>
-        <div class="stadium-card-info">
-          <h4>${s.name}</h4>
-          <p>${s.city}, ${s.country}</p>
-          <span class="sport-tag">${s.sport.toUpperCase()}</span>
-        </div>
-      </div>
-    `).join('');
-  }
-  if (dropdown) {
-    const existingOptions = `<option value="" disabled selected>— Choose your stadium —</option>`;
-    dropdown.innerHTML = existingOptions + activeStadiums.map(s => `
-      <option value="${s.id}">${s.name} (${s.city})</option>
-    `).join('');
-  }
-}
-
-function enterStadium(sid) {
-  try {
-    console.log("Entering stadium:", sid);
-    currentStadiumId = sid;
-    localStorage.setItem('venue_stadium_id', sid);
-    
-    // Join Room
-    if (typeof socket !== 'undefined' && socket.connected) {
-      socket.emit('join_stadium', sid);
-    }
-    
-    // UI Transition
-    const authOverlay = document.getElementById('authOverlay');
-    const selectorOverlay = document.getElementById('stadiumSelectorOverlay');
-    const hero = document.getElementById('mainHero');
-    const mainContent = document.getElementById('mainContent');
-
-    if (authOverlay) authOverlay.style.display = 'none';
-    if (selectorOverlay) selectorOverlay.style.display = 'none';
-    if (hero) hero.style.display = 'flex';
-    if (mainContent) mainContent.style.display = 'block';
-
-    // Force active tab to venue to ensure rendering
-    switchTab('venue');
-
-    // REST Fallback for immediate data
-    fetch(`/api/stadium/${sid}`)
-      .then(r => r.json())
-      .then(d => { 
-        if(d.success && d.data.state) updateMatchUI(d.data.state);
-        if(d.success && d.data.venue) venueState = d.data.venue;
-      })
-      .catch(e => console.error("Match fetch fallback failed:", e));
-    
-    fetchWeather();
-  } catch (err) {
-    console.error("Critical error inside enterStadium:", err);
-  }
-}
-
-function updateUserUI() {
-  const userJson = sessionStorage.getItem('venue_user');
-  if (!userJson) return;
-  try {
-    const user = JSON.parse(userJson);
-    const name = user.name || user.email || 'Stadium Guest';
-    const initial = name.charAt(0).toUpperCase();
-
-    // Top Bar
-    const nameEl = document.getElementById('userNameDisplay');
-    const avatarImg = document.getElementById('userAvatar');
-    if (nameEl) nameEl.textContent = name;
-    if (avatarImg && avatarImg.tagName === 'IMG') {
-       avatarImg.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=c9973a&color=fff`;
-    }
-
-    // Selector Overlay
-    const selName = document.getElementById('selectorUserName');
-    const selAvatar = document.getElementById('selectorUserAvatar');
-    if (selName) selName.textContent = name;
-    if (selAvatar) selAvatar.textContent = initial;
-
-  } catch (e) {
-    console.error("User UI Update failed:", e);
-  }
-}
-
-function logout() {
-  sessionStorage.removeItem('venue_user');
-  localStorage.removeItem('venue_stadium_id');
-  window.location.reload();
-}
-
-// ── GLOBAL EXPORTS (Req: Fix buttons not working) ────────────────────────
-window.enterStadium = enterStadium;
-window.logout = logout;
-window.switchTab = (id) => (typeof switchTab !== 'undefined' ? switchTab(id) : console.warn('switchTab not loaded'));
-window.toggleCart = () => (typeof toggleCart !== 'undefined' ? toggleCart() : console.warn('toggleCart not loaded'));
-window.placeOrder = () => (typeof placeOrder !== 'undefined' ? placeOrder() : console.warn('placeOrder not loaded'));
-window.getRoute = () => (typeof getRoute !== 'undefined' ? getRoute() : console.warn('getRoute not loaded'));
-window.showStadiumSelector = () => {
-  document.getElementById('stadiumSelectorOverlay').style.display = 'flex';
-  document.getElementById('mainHero').style.display = 'none';
-  document.getElementById('mainContent').style.display = 'none';
-  if (typeof loadStadiums === 'function') loadStadiums();
-};
-window.openLiveCctv = openLiveCctv;
-window.openARSeatView = openARSeatView;
-window.loadStadiums = loadStadiums;
-
-// ── Restore from localStorage ─────────────────────────────────
-function restoreBooking() {
-  const b = localStorage.getItem('venue_booking');
-  if (b) showTicket(JSON.parse(b));
-}
-function restoreOrders() {
-  const o = localStorage.getItem('my_orders');
-  if (o) { myOrders = JSON.parse(o); renderMyOrders(); }
-}
-function saveOrders() { localStorage.setItem('my_orders', JSON.stringify(myOrders)); }
-
-// ── Countdown on orders ───────────────────────────────────────
-function tickETAs() {
-  let changed = false;
-  myOrders.forEach(o => {
-    if (o.status === 'preparing' && o.remainingTime > 0) { o.remainingTime--; changed = true; }
-  });
-  if (changed) renderMyOrders();
-}
-
-// ── Socket events ─────────────────────────────────────────────
-socket.on('venue_update', data => {
-  if (!data) return;
-  venueState = data;
-  
-  // Defensive checks for all numerical fields to prevent crashes
-  const att = (data.totalAttendance || 0).toLocaleString('en-IN');
-  setText('liveAttendance', att);
-  
-  const concessions = data.concessions || [];
-  const avgWait = concessions.length 
-    ? (concessions.reduce((a,c) => a + (c.queue_time || 0), 0) / concessions.length).toFixed(1)
-    : '0.0';
-  setText('liveWait', avgWait + ' min');
-  
-  const gates = data.gates || [];
-  const best = [...gates].sort((a,b) => (a.queue_length || 0) - (b.queue_length || 0))[0];
-  if (best) setText('bestGate', 'Gate ' + (best.id || 'A'));
-  
-  renderZoneCards(data);
-  renderGateStatus(gates);
-});
-
-// ─── Fetch Match State ────────────────────────────────────────
-async function fetchMatch() {
-  try {
-    const res = await fetch(`/api/match?stadiumId=${currentStadiumId || 'hyderabad_stadium'}`);
-    const data = await res.json();
-    if (data.success) updateMatchUI(data.data);
-  } catch (e) { console.error('Match fetch failed'); }
-}
-
-// ─── Socket: Match Update ──────────────────────────────────────────────
-socket.on('match_update', data => {
-  updateMatchUI(data);
-});
-
-const STADIUM_MAP = {
-  'hyderabad_stadium': 'Rajiv Gandhi Intl Stadium',
-  'eden_gardens': 'Eden Gardens',
-  'chinnaswamy': 'M. Chinnaswamy Stadium',
-  'chepauk': 'M. A. Chidambaram Stadium',
-  'wankhede': 'Wankhede Stadium',
-  'delhi_stadium': 'Arun Jaitley Stadium',
-  'dharamshala_stadium': 'HPCA Stadium',
-  'ekana_stadium': 'Ekana Stadium',
-  'jaipur_stadium': 'Sawai Mansingh Stadium',
-  'mohali_stadium': 'IS Bindra Stadium',
-  'ahmedabad_stadium': 'Narendra Modi Stadium',
-  'lords': "Lord's Cricket Ground",
-  'mcg': 'Melbourne Cricket Ground'
-};
-
-function showStadiumSelector() {
-  const overlay = document.getElementById('stadiumSelectorOverlay');
-  if (overlay) overlay.style.display = 'flex';
-  const hero = document.getElementById('mainHero');
-  if (hero) hero.style.display = 'none';
-  loadStadiums();
-}
-
-function updateMatchUI(data) {
-  if (!data) return;
-  // Score Update (with screen reader announcement)
-  const prevHome = document.getElementById('homeScore')?.textContent;
-  const prevAway = document.getElementById('awayScore')?.textContent;
-  setText('homeScore', sanitizeText(data.homeScore));
-  setText('awayScore', sanitizeText(data.awayScore));
-  // Announce score change to screen readers
-  if (data.homeTeam && data.awayTeam) {
-    const scoreMsg = `${sanitizeText(data.homeTeam)} ${data.homeScore}/${data.homeWickets || 0} vs ${sanitizeText(data.awayTeam)} ${data.awayScore}/${data.awayWickets || 0}. Status: ${(data.status||'').replace(/_/g,' ')}`;
-    if (scoreMsg !== lastAnnounced) announce(scoreMsg);
-  }
-  
-  // Wickets Update (Special for Cricket)
-  const homeW = document.getElementById('homeWickets');
-  const homeWrap = document.getElementById('homeWicketsWrap');
-  const awayW = document.getElementById('awayWickets');
-  const awayWrap = document.getElementById('awayWicketsWrap');
-
-  if (data.sport === 'cricket') {
-    if (homeW) homeW.innerText = data.homeWickets || 0;
-    if (awayW) awayW.innerText = data.awayWickets || 0;
-    if (homeWrap) homeWrap.style.display = 'inline';
-    if (awayWrap) awayWrap.style.display = 'inline';
-  } else {
-    if (homeWrap) homeWrap.style.display = 'none';
-    if (awayWrap) awayWrap.style.display = 'none';
-  }
-
-  setText('matchStatus', (data.status || 'pre_match').replace(/_/g,' ').toUpperCase());
-  setText('matchMinute', (data.minute || 0) > 0 ? data.minute + "'" : '');
-
-  // Toss Update
-  const tossEl = document.getElementById('matchToss');
-  if (tossEl) {
-    tossEl.innerText = data.toss || 'Waiting for toss...';
-    tossEl.style.display = data.status === 'pre_match' || data.status === 'first_half' ? 'block' : 'none';
-  }
-
-  // Target Update
-  const targetEl = document.getElementById('targetScore');
-  if (targetEl) {
-    if (data.target > 0) {
-      targetEl.innerText = `Target: ${data.target}`;
-      targetEl.style.display = 'block';
-    } else {
-      targetEl.style.display = 'none';
-    }
-  }
-
-  // Sport-specific Icons and Real-world Role Assignment
-  const sportIcons = { cricket:'🏏', football:'⚽', basketball:'🏀', volleyball:'🏐', kabaddi:'⛹️', hockey:'🏑' };
-  let iconA = sportIcons[data.sport] || '🏟️';
-  let iconB = iconA;
-
-  // Custom roles for Cricket (Batting vs Bowling swap)
-  if (data.sport === 'cricket') {
-    if (data.battingTeam === 'home') { iconA = '🏏'; iconB = '🔴'; }
-    else { iconA = '🔴'; iconB = '🏏'; }
-  }
-
-  setText('heroTeamA', data.homeTeam);
-  setText('heroTeamB', data.awayTeam);
-  setText('heroIconA', iconA);
-  setText('heroIconB', iconB);
-  const syncMsgs = [
-    `📡 Reality Sync: Active (${data.sport?.toUpperCase()} API)`,
-    `🤖 AI Agent: Analyzing ${data.homeTeam} performance...`,
-    `🌍 Cloud Sync: Connected to Global Sports Feed`,
-    `🌡️ Weather: ${data.weather?.temp}°C | Humidity: ${data.weather?.humidity}%`
-  ];
-  const msg = syncMsgs[Math.floor(Math.random() * syncMsgs.length)];
-  const statusEl = document.getElementById('aiSyncText');
-  if (statusEl) statusEl.innerText = msg;
-
-  if (data.weather) {
-    const weatherEl = document.getElementById('heroWeather');
-    if (weatherEl) weatherEl.innerText = `${data.weather.temp}°C | ${data.weather.condition}`;
-  }
-
-  // Force Update Stadium Name (PRIORITIZE data.stadiumName or Mapping)
-  const stName = data.stadiumName || STADIUM_MAP[data.stadium] || 'Rajiv Gandhi Intl Stadium';
-  const titleEl = document.getElementById('heroTitle');
-  if (titleEl) {
-    const words = stName.split(' ');
-    if (words.length > 1) {
-       const last = words.pop();
-       titleEl.innerHTML = `${words.join(' ')} <span class="gradient-text">${last}</span>`;
-    } else {
-       titleEl.innerHTML = stName;
-    }
-  }
-
-  // Goal toast
-  if (data.events && data.events.length) {
-    const last = data.events[data.events.length - 1];
-    if (last && (last.type === 'goal' || last.type === 'alert')) {
-       showToast(`${last.msg || (last.team + ' scored!')}`, 'success');
-    }
-  }
-}
-
-socket.on('alert', alert => {
-  if (alert.type === 'danger') showToast(alert.message, 'danger');
-  appendAlert(alert);
-});
-
-socket.on('order_update', updated => {
-  const o = myOrders.find(x => x.id === updated.id);
-  if (o) {
-    Object.assign(o, updated);
-    renderMyOrders(); saveOrders();
-    if (updated.status === 'ready')     showToast(`✅ ${updated.id} ready for pickup!`, 'success');
-    if (updated.status === 'delivered') showToast(`📦 ${updated.id} delivered!`, 'info');
-  }
-});
-
-socket.on('menu_update', updated => { fullMenu = updated; renderMenu(); });
-
+// ── NAVIGATION (Fixed Recursion) ─────────────────────────────
 function switchTab(id) {
-  // Update UI Panels
+  if (id === currentTab) return;
+  console.log(`🚀 Switching to: ${id}`);
+
+  // 1. Hide all panels
   document.querySelectorAll('.tab-panel').forEach(p => {
     p.classList.remove('active');
     p.setAttribute('hidden', '');
   });
-  
-  // Update Nav Buttons
-  document.querySelectorAll('.tab-btn').forEach(b => {
+
+  // 2. Deactivate all buttons
+  document.querySelectorAll('.nav-item').forEach(b => {
     b.classList.remove('active');
-    b.setAttribute('aria-selected', 'false');
-    b.setAttribute('tabindex', '-1');
-    b.removeAttribute('aria-current');
   });
 
-  const panel = document.getElementById(`tab-${id}`);
-  const btn   = document.querySelector(`[data-tab="${id}"]`);
+  // 3. Activate Target
+  const targetPanel = document.getElementById(`tab-${id}`);
+  const targetBtn = document.querySelector(`[data-tab="${id}"]`);
 
-  if (panel) {
-    panel.classList.add('active');
-    panel.removeAttribute('hidden');
-    panel.focus({ preventScroll: true }); 
+  if (targetPanel) {
+    targetPanel.classList.add('active');
+    targetPanel.removeAttribute('hidden');
+  } else {
+    console.error(`Missing Panel: tab-${id}`);
   }
-  if (btn) {
-    btn.classList.add('active');
-    btn.setAttribute('aria-selected', 'true');
-    btn.setAttribute('aria-current', 'page');
-    btn.setAttribute('tabindex', '0');
+
+  if (targetBtn) {
+    targetBtn.classList.add('active');
   }
 
   currentTab = id;
-  if (id === 'food') renderMenu();
-  
-  // Screen reader announcement
-  const announcer = document.getElementById('live-announcer');
-  if (announcer) announcer.textContent = `Tab switched to ${id}`;
-  
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
 
-// ── UI Updates ────────────────────────────────────────────────
-function updateVenueUI(data) {
-  if (data.infrastructure) {
-    renderZoneCards(data.infrastructure);
-    renderGateStatus(data.infrastructure.gates);
-    renderCCTVs(data.infrastructure.cctv);
+  // Contextual Loads
+  if (id === 'food') renderMenu();
+  if (id === 'orders') renderOrders();
+}
+window.switchTab = switchTab; // Ensure global availability
+
+// ── AUTH & SELECTION ─────────────────────────────────────────
+async function loadStadiums() {
+  const grid = document.getElementById('stadiumGrid');
+  if (!grid) return;
+  
+  try {
+    const res = await fetch('/api/stadiums');
+    const result = await res.json();
+    if (result.success) {
+      activeStadiums = result.data;
+      grid.innerHTML = activeStadiums.map(s => `
+        <div class="stadium-card" onclick="enterStadium('${s.id}')">
+          <div class="stadium-card-image">🏟️</div>
+          <div class="stadium-card-info">
+            <h4>${s.name}</h4>
+            <p>${s.city}, ${s.country}</p>
+            <span class="sport-tag">${s.sport.toUpperCase()}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (e) {
+    grid.innerHTML = '<div class="error">Connectivity Error. Refreshing...</div>';
   }
 }
+window.loadStadiums = loadStadiums;
 
-function renderCCTVs(cctvs) {
-  const grid = document.getElementById('cctvGrid');
-  if (!grid || !cctvs) return;
-  grid.innerHTML = cctvs.map(cam => `
-    <div class="ai-cctv-card">
-      <div class="ai-cctv-video">
-        <img src="${cam.feed}" loading="lazy" style="width:100%;height:100%;object-fit:cover;opacity:0.8" alt="Live feed from ${cam.name}">
-        <div class="ai-bbox" style="top:${20 + Math.random()*40}%;left:${10 + Math.random()*60}%"></div>
-        <div class="ai-overlay-badge"><span style="color:#10b981">●</span> ${cam.status.toUpperCase()} | AI SECURE</div>
+function enterStadium(sid) {
+  console.log(`🏟️ Syncing with Stadium: ${sid}`);
+  currentStadiumId = sid;
+  localStorage.setItem('venue_stadium_id', sid);
+  
+  // Hide UI layers
+  const selection = document.getElementById('stadiumSelectorOverlay');
+  const mainApp = document.getElementById('mainContent');
+  if(selection) selection.style.display = 'none';
+  if(mainApp) mainApp.style.display = 'block';
+
+  // Join Socket Room
+  socket.emit('join_stadium', sid);
+  
+  // Initial Loads
+  fetch(`/api/stadium/${sid}`).then(r => r.json()).then(res => {
+     if(res.success) {
+       document.getElementById('currentStadiumName').textContent = res.data.stadiumName;
+       updateMatchUI(res.data);
+     }
+  });
+  
+  renderSlots();
+}
+window.enterStadium = enterStadium;
+
+// ── VENUE: ENTRY SLOTS (Req: Book Ticket) ───────────────────
+function renderSlots() {
+  const grid = document.getElementById('slotsGrid');
+  if(!grid) return;
+
+  const times = ["18:00", "18:30", "19:00", "19:30", "20:00"];
+  grid.innerHTML = times.map(t => `
+    <div class="slot-card" onclick="bookSlot('${t}')">
+      <div class="time">${t}</div>
+      <div class="label">Entry A</div>
+    </div>
+  `).join('');
+}
+
+function bookSlot(time) {
+  alert(`🎟️ Booking Confirmed: ${time} Gate A\nYour digital pass is now in Orders tab.`);
+  const ticket = { id: 'TKT-' + Math.random().toString(36).substr(2,5), name: 'Match Entry', price: 0, status: 'Active', type: 'ticket', time };
+  myOrders.unshift(ticket);
+  localStorage.setItem('venue_orders', JSON.stringify(myOrders));
+}
+window.bookSlot = bookSlot;
+
+// ── FOOD COURT ───────────────────────────────────────────────
+async function renderMenu() {
+  const grid = document.getElementById('menuGrid');
+  if(!grid) return;
+
+  if (fullMenu.length === 0) {
+    const res = await fetch('/api/menu');
+    const data = await res.json();
+    fullMenu = data.data || [];
+  }
+
+  grid.innerHTML = fullMenu.map(item => `
+    <div class="menu-card">
+      <div class="menu-thumb">${item.type === 'beverage' ? '🥤' : '🍔'}</div>
+      <div class="menu-details">
+        <h5>${item.name}</h5>
+        <span class="price">₹${item.price}</span>
       </div>
-      <div class="ai-cctv-footer">
-        <span>${cam.name}</span>
-        <span class="queue-badge ${Math.random() > 0.5 ? 'short' : 'medium'}">● Active</span>
+      <button class="add-btn" onclick="addToCart('${item.id}')">+</button>
+    </div>
+  `).join('');
+}
+
+function addToCart(id) {
+  const item = fullMenu.find(i => i.id === id);
+  if(!item) return;
+
+  const order = { ...item, id: 'ORD-' + Date.now(), status: 'preparing', timestamp: new Date().toLocaleTimeString() };
+  myOrders.unshift(order);
+  localStorage.setItem('venue_orders', JSON.stringify(myOrders));
+  alert(`✅ Added ${item.name} to Orders!`);
+}
+window.addToCart = addToCart;
+
+// ── ORDERS ───────────────────────────────────────────────────
+function renderOrders() {
+  const list = document.getElementById('orderList');
+  if(!list) return;
+
+  if (myOrders.length === 0) {
+    list.innerHTML = '<div class="empty">No active orders yet.</div>';
+    return;
+  }
+
+  list.innerHTML = myOrders.map(o => `
+    <div class="order-card">
+      <div class="order-icon">${o.type === 'ticket' ? '🎟️' : '🍕'}</div>
+      <div class="order-info">
+        <h5>${o.name}</h5>
+        <span>${o.status.toUpperCase()} · ${o.time || o.timestamp}</span>
       </div>
     </div>
   `).join('');
 }
 
-// ── Zone cards ────────────────────────────────────────────────
-function renderZoneCards(data) {
-  const c = document.getElementById('zoneCards');
-  if (!c) return;
-  c.innerHTML = data.zones.map(z => {
-    const pct = Math.min(100, (z.current / z.capacity) * 100).toFixed(0);
-    const col = pct > 85 ? '#dc2626' : pct > 60 ? '#f59e0b' : '#059669';
-    const lab = pct > 85 ? '🔴 Packed' : pct > 60 ? '🟡 Busy' : '🟢 Free';
-    const zEl = document.getElementById(`zone-${z.id}`);
-    if (zEl) zEl.setAttribute('class', `zone-path ${pct > 80 ? 'hot' : pct > 50 ? 'warm' : 'cool'}`);
-    return `
-      <div class="zone-card">
-        <div class="zone-card-name">${z.name}</div>
-        <div class="zone-card-count" style="color:${col}">${z.current.toLocaleString('en-IN')}</div>
-        <div class="zone-bar"><div class="zone-bar-fill" style="width:${pct}%;background:${col}"></div></div>
-        <div class="zone-card-label">${lab} · ${pct}%</div>
-      </div>`;
-  }).join('');
+// ── SOCKET HANDLERS ──────────────────────────────────────────
+socket.on('match_update', data => updateMatchUI(data));
 
-  // Gate dots
-  data.gates.forEach(g => {
-    const dot = document.getElementById(`gate-${g.id}`);
-    if (dot) { dot.classList.toggle('busy', g.queue_length > 50); }
-  });
-}
-
-function renderGateStatus(gates) {
-  const c = document.getElementById('gateStatusGrid');
-  if (!c) return;
-  c.innerHTML = gates.map(g => {
-    const busy = g.queue_length > 50;
-    return `
-      <div class="gate-status-card ${busy ? 'gate-busy' : 'gate-ok'}">
-        <span class="gate-id">Gate ${g.id}</span>
-        <span class="gate-q">${g.queue_length} in queue</span>
-        <span class="gate-dot-label">${busy ? '🔴 Busy' : '🟢 Open'}</span>
-      </div>`;
-  }).join('');
-}
-
-function appendAlert(a) {
-  const list = document.getElementById('alertsList');
-  if (!list) return;
-  const icons = { danger:'🔴', warning:'🟡', info:'🔵', success:'🟢' };
-  const time = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-  list.insertAdjacentHTML('afterbegin', `
-    <div class="alert-mini ${a.type}">
-      <span>${icons[a.type] || '•'}</span>
-      <span class="alert-mini-msg">${a.message}</span>
-      <span class="alert-mini-time">${time}</span>
-    </div>`);
-  while (list.children.length > 6) list.lastChild.remove();
-}
-
-// ── Weather ───────────────────────────────────────────────────
-async function fetchWeather() {
-  try {
-    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=19.0760&longitude=72.8777&current_weather=true&forecast_days=1');
-    const d = await res.json();
-    const cw = d.current_weather;
-    const icons = [0,1,2,3].includes(cw.weathercode) ? '☀️' : cw.weathercode < 60 ? '🌦️' : '⛈️';
-    setText('heroWeather', `${icons} ${cw.temperature}°C`);
-  } catch(e) {}
-}
-
-// ── Entry Slots ───────────────────────────────────────────────
-async function fetchSlots() {
-  const grid = document.getElementById('slotsGrid');
-  if (!grid) return;
-  try {
-    const res  = await fetch('/api/entry/slots');
-    const data = await res.json();
-    if (!data.success) { grid.innerHTML = `<div class="slot-error">❌ Failed to load slots</div>`; return; }
-    renderSlots(data.data);
-  } catch(e) {
-    grid.innerHTML = `<div class="slot-error">❌ Server error — refresh to retry</div>`;
-  }
-}
-
-function renderSlots(slots) {
-  const grid = document.getElementById('slotsGrid');
-  if (!grid) return;
-  grid.innerHTML = slots.map(s => {
-    const pct = ((s.booked / s.capacity) * 100).toFixed(0);
-    const left = s.capacity - s.booked;
-    const full = s.status === 'full' || left <= 0;
-    return `
-      <div class="slot-card ${full ? 'full' : ''}" onclick="${full ? '' : `bookSlot('${s.id}')`}">
-        <div class="slot-time">${s.startTime} – ${s.endTime}</div>
-        <div class="slot-avail">${full ? '⛔ Full' : `${left} spots left`}</div>
-        <div class="slot-bar"><div class="slot-fill" style="width:${pct}%"></div></div>
-        ${!full ? `<div class="slot-cta">Tap to Book ↗</div>` : ''}
-      </div>`;
-  }).join('');
-}
-
-async function bookSlot(slotId) {
-  showToast('⏳ Booking slot...', 'info');
-  try {
-    const res  = await fetch('/api/entry/book', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ slotId, count: 1 })
-    });
-    const data = await res.json();
-    if (data.success) {
-      localStorage.setItem('venue_booking', JSON.stringify(data.data));
-      showTicket(data.data);
-      showToast('✅ Entry slot booked!', 'success');
-    } else {
-      showToast(data.error || 'Booking failed', 'danger');
-    }
-  } catch(e) { showToast('Network error — retry', 'danger'); }
-}
-
-function showTicket(d) {
-  const grid    = document.getElementById('slotsGrid');
-  const display = document.getElementById('ticketDisplay');
-  if (grid)    grid.style.display = 'none';
-  if (!display) return;
-  display.style.display = 'block';
-  setText('ticketTime', d.timeWindow);
-  setText('ticketGate', 'Gate ' + d.gate);
-  setText('ticketQRText', d.qrCode);
-  const qr = document.getElementById('ticketQR');
-  if (qr) {
-    qr.innerHTML = '';
-    new QRCode(qr, {
-      text: d.qrCode,
-      width: 150,
-      height: 150,
-      colorDark: "#000000",
-      colorLight: "#ffffff",
-      correctLevel: QRCode.CorrectLevel.H
-    });
-  }
-}
-
-/* resetBooking removed per user request */
-
-// ── Food Menu ─────────────────────────────────────────────────
-async function fetchMenu() {
-  try {
-    const res  = await fetch('/api/food/menu');
-    const body = await res.json();
-    fullMenu = body.data || [];
-    renderMenu();
-  } catch(e) {
-    const g = document.getElementById('menuGrid');
-    if (g) g.innerHTML = `<div class="slot-error">❌ Menu failed to load</div>`;
-  }
-}
-
-let currentCategory = 'all';
-function filterMenu(cat, btn) {
-  currentCategory = cat;
-  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  renderMenu();
-}
-
-function renderMenu() {
-  const grid = document.getElementById('menuGrid');
-  if (!grid) return;
-  const items = currentCategory === 'all' ? fullMenu : fullMenu.filter(i => i.category === currentCategory);
-  if (!items.length) { grid.innerHTML = `<div class="slot-error">No items in this category</div>`; return; }
-  grid.innerHTML = items.map(item => {
-    const avail = item.available !== false;
-    const nameEsc = item.name.replace(/'/g,"\\'");
-    return `
-      <div class="menu-card ${avail ? '' : 'unavailable'}" 
-           role="button" 
-           tabindex="${avail ? '0' : '-1'}"
-           aria-label="${avail ? `Add ${item.name} for ₹${item.price} to cart` : `${item.name} is currently unavailable`}"
-           onclick="${avail ? `addToCart('${item.id}','${nameEsc}',${item.price},'${item.image||'🍽️'}')` : ''}"
-           onkeypress="${avail ? `if(event.key==='Enter')addToCart('${item.id}','${nameEsc}',${item.price},'${item.image||'🍽️'}')` : ''}">
-        <div class="menu-emoji" aria-hidden="true">${item.image || '🍽️'}</div>
-        <div class="menu-name">${item.name}</div>
-        <div class="menu-price" role="text">${avail ? '₹'+item.price : '⛔ Unavailable'}</div>
-        ${avail ? `<div class="menu-add-btn" aria-hidden="true">+ Add</div>` : ''}
-      </div>`;
-  }).join('');
-}
-
-// ── Cart ──────────────────────────────────────────────────────
-function addToCart(id, name, price, image) {
-  const ex = cart.find(i => i.id === id);
-  if (ex) ex.qty++;
-  else cart.push({ id, name, price, qty:1, image });
-  renderCart();
-  showToast(`🛒 ${name} added!`, 'success');
-}
-
-function removeFromCart(id) {
-  const idx = cart.findIndex(i => i.id === id);
-  if (idx < 0) return;
-  if (cart[idx].qty > 1) cart[idx].qty--;
-  else cart.splice(idx, 1);
-  renderCart();
-}
-
-function renderCart() {
-  const bar = document.getElementById('cartBar');
-  if (!bar) return;
-  if (!cart.length) { bar.style.display = 'none'; isCartOpen = false; return; }
-  bar.style.display = 'block';
-  const total = cart.reduce((s,i) => s + i.price * i.qty, 0);
-  const count = cart.reduce((s,i) => s + i.qty, 0);
-  setText('cartCount', count);
-  setText('cartTotal', total.toLocaleString('en-IN'));
-  const items = document.getElementById('cartItems');
-  if (items) {
-    items.innerHTML = cart.map(item => `
-      <div class="cart-row">
-        <span>${item.image} ${item.name} × ${item.qty}</span>
-        <span>₹${(item.price * item.qty).toLocaleString('en-IN')}</span>
-        <button onclick="removeFromCart('${item.id}')" 
-                class="cart-remove" 
-                aria-label="Remove ${item.name} from cart">✕</button>
-      </div>`).join('');
-  }
-}
-
-function toggleCart() {
-  isCartOpen = !isCartOpen;
-  const drop = document.getElementById('cartDropdown');
-  if (drop) drop.style.display = isCartOpen ? 'block' : 'none';
-}
-
-// ── Place Order (Demo mode — works without Razorpay) ──────────
-async function placeOrder() {
-  const seat = document.getElementById('seatInput')?.value?.trim();
-  const zone = document.getElementById('foodZone')?.value || 'north';
-  if (!seat)        return showToast('⚠️ Enter your seat number first', 'danger');
-  if (!cart.length) return showToast('⚠️ Cart is empty', 'danger');
-
-  const btn = document.getElementById('placeOrderBtn');
-  if (btn) { btn.disabled = true; btn.innerText = '⏳ Placing order...'; }
-
-  try {
-    // Step 1: Create order via API (triggers demo payment flow)
-    const res  = await fetch('/api/payment/create-order', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ items: cart, zone, seat, stadiumId: currentStadiumId || 'hyderabad_stadium' })
-    });
-    const data = await res.json();
-
-    if (!data.success) {
-      showToast(data.error || 'Failed to create order', 'danger');
-      if (btn) { btn.disabled = false; btn.innerText = '💳 Confirm Order (Demo Pay)'; }
-      return;
-    }
-
-    // Step 2: In demo mode, verify immediately (no payment gateway needed)
-    const vRes = await fetch('/api/payment/verify', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        pendingRef: data.data.pendingRef,
-        razorpay_order_id: data.data.rzpOrderId,
-        razorpay_payment_id: `demo_${Date.now()}`,
-        razorpay_signature: '',
-        demoSuccess: true
-      })
-    });
-    const vData = await vRes.json();
-
-    if (vData.success) {
-      handleOrderSuccess(vData.data);
-    } else {
-      showToast(vData.error || 'Order failed', 'danger');
-    }
-  } catch(e) {
-    showToast('Network error — please retry', 'danger');
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerText = '💳 Confirm Order (Demo Pay)'; }
-  }
-}
-
-function handleOrderSuccess(order) {
-  myOrders.push(order);
-  cart = [];
-  renderCart();
-  isCartOpen = false;
-  const drop = document.getElementById('cartDropdown');
-  if (drop) drop.style.display = 'none';
-  saveOrders();
-  renderMyOrders();
-  switchTab('myorders');
-  showToast('✅ Order confirmed! Show QR at pickup', 'success');
-}
-
-// ── My Orders ─────────────────────────────────────────────────
-function renderMyOrders() {
-  const list = document.getElementById('myOrdersList');
-  if (!list) return;
-  if (!myOrders.length) {
-    list.innerHTML = `<div class="empty-state"><span>📋</span><p>No orders yet — go to Food tab!</p></div>`;
-    return;
-  }
-  list.innerHTML = [...myOrders].reverse().map(o => {
-    const eta = o.remainingTime > 0 ? `⏱️ ${o.remainingTime}s` : '';
-    const sc = o.status === 'ready' ? '#059669' : o.status === 'delivered' ? '#6366f1' : '#f59e0b';
-    return `
-      <div class="order-card">
-        <div class="order-top">
-          <span class="order-id">${o.id}</span>
-          <span class="order-badge" style="background:${sc}">${o.status.toUpperCase()}</span>
-        </div>
-        <div class="order-items">${(o.items||[]).map(i => `${i.image||'🍽️'} ${i.name} ×${i.qty}`).join(' · ')}</div>
-        <div class="order-meta">
-          <span>📍 ${o.seat} — ${(o.zone||'').toUpperCase()}</span>
-          <span>💰 ₹${o.total}</span>
-          <span>${o.status === 'preparing' ? eta || '⏳ Preparing' : o.status === 'ready' ? '✅ Ready!' : '📦 Delivered'}</span>
-        </div>
-        <div class="order-qr-row">
-          <div id="qr-order-${o.id}" class="order-qr-wrap" style="display:inline-block;background:#fff;padding:8px;border-radius:8px;"></div>
-          <div>
-            <div style="font-weight:800;font-size:0.9rem;">Pickup QR</div>
-            <div style="font-size:0.72rem;font-family:monospace;color:var(--text-secondary)">${o.qrCode || o.id}</div>
-            <div style="font-size:0.75rem;color:var(--text-muted)">Show to staff at ${o.concession || 'concession'}</div>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
-  
-  [...myOrders].reverse().forEach(o => {
-    const el = document.getElementById(`qr-order-${o.id}`);
-    if (el) {
-      el.innerHTML = '';
-      new QRCode(el, { text: o.qrCode || o.id, width: 80, height: 80, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
-    }
-  });
-}
-
-// ── Smart Navigation ─────────────────────────────────────────
-async function getRoute() {
-  const dest = document.getElementById('navDestination')?.value || 'seat';
-  const gate = venueState?.gates ? [...venueState.gates].sort((a,b)=>a.queue_length-b.queue_length)[0]?.id : 'A';
-  const btn  = document.querySelector('.nav-btn');
-  if (btn) { btn.disabled = true; btn.innerText = '🔎 Finding route...'; }
-  const sid = currentStadiumId || 'hyderabad_stadium';
-  try {
-    const res  = await fetch(`/api/routing/optimal?to=${dest}&gate=${gate}&stadiumId=${sid}`);
-    const data = await res.json();
-    if (!data.success) return showToast('Could not calculate route', 'danger');
-
-    const r = data.data.recommended;
-    const alts = data.data.alternatives;
-    const col = r.congestion === 'low' ? '#059669' : r.congestion === 'medium' ? '#f59e0b' : '#dc2626';
-    const results = document.getElementById('routeResults');
-    results.style.display = 'block';
-    results.innerHTML = `
-      <div class="route-card best">
-        <div class="route-best-badge">⭐ Best Route</div>
-        <div class="route-steps">
-          ${(r.path || r.steps || []).map((s,i) => `<div class="route-step"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join('<div class="step-connector"></div>')}
-        </div>
-        <div class="route-meta">
-          <span>📏 ${r.distance}</span>
-          <span>⏱️ ${r.time}</span>
-          <span style="color:${col}">● ${r.congestion.toUpperCase()}</span>
-        </div>
-      </div>
-      ${(alts || []).map(a => `
-        <div class="route-card alt">
-          <div style="font-weight:800;margin-bottom:6px">${a.label || 'Alternative Route'}</div>
-          <div style="font-size:0.82rem;color:var(--text-secondary)">${a.path.join(' → ')}</div>
-          <div class="route-meta" style="margin-top:6px"><span>📏 ${a.distance}</span><span>⏱️ ${a.time}</span></div>
-        </div>`).join('')}`;
-
-    if (data.data.lowCongestionGates?.length) showToast(`💡 Low traffic: Gates ${data.data.lowCongestionGates.join(', ')}`, 'info');
-  } catch(e) { showToast('Navigation error — retry', 'danger'); }
-  finally { if (btn) { btn.disabled = false; btn.innerText = '🧭 Find Best Route'; } }
-}
-
-// ── CCTV AI animation ─────────────────────────────────────────
-function animateBboxes() {
-  document.querySelectorAll('.ai-bbox').forEach(b => {
-    b.style.top  = (10 + Math.random()*50)+'%';
-    b.style.left = (10 + Math.random()*60)+'%';
-  });
-  const c = document.getElementById('aiConfidence');
-  if (c) c.innerText = (94 + Math.random()*5).toFixed(1) + '%';
-}
-
-// ── Helpers ───────────────────────────────────────────────────
-function setText(id, val) { const el = document.getElementById(id); if (el) el.innerText = val; }
-
-// ── Toast ─────────────────────────────────────────────────────
-let _tq = [], _ts = false;
-function showToast(msg, type='info') { _tq.push({msg,type}); if (!_ts) _flush(); }
-function _flush() {
-  if (!_tq.length) { _ts = false; return; }
-  _ts = true;
-  const {msg,type} = _tq.shift();
-  const cols = { danger:'#dc2626', success:'#059669', warning:'#d97706', info:'#4f46e5' };
-  let pill = document.getElementById('_tp');
-  if (!pill) {
-    pill = document.createElement('div'); pill.id = '_tp';
-    pill.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%) translateY(-60px);z-index:99999;display:flex;align-items:center;gap:6px;padding:8px 18px;border-radius:999px;font-size:0.82rem;font-weight:700;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.5);transition:transform 0.25s ease,opacity 0.25s ease;opacity:0;pointer-events:none;font-family:Nunito,sans-serif;max-width:85vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-    document.body.appendChild(pill);
-  }
-  pill.style.background = cols[type] || cols.info;
-  pill.innerText = msg;
-  requestAnimationFrame(() => { pill.style.opacity='1'; pill.style.transform='translateX(-50%) translateY(0)'; });
-  setTimeout(() => {
-    pill.style.opacity='0'; pill.style.transform='translateX(-50%) translateY(-60px)';
-    setTimeout(_flush, 280);
-  }, 2400);
+function updateMatchUI(data) {
+  document.getElementById('homeName').textContent = data.homeTeam;
+  document.getElementById('awayName').textContent = data.awayTeam;
+  document.getElementById('homeScore').textContent = data.homeScore;
+  document.getElementById('awayScore').textContent = data.awayScore;
+  document.getElementById('matchStatus').textContent = data.status.replace('_', ' ').toUpperCase();
+  document.getElementById('matchClock').textContent = data.minute + "'";
 }

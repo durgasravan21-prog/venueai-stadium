@@ -5,305 +5,206 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="VenueAI — Smart Stadium Experience. Book entry, order food, navigate with AI assistance.">
   <meta name="theme-color" content="#1a4a2e">
-
-  <!-- SEO & Google Services -->
   <title>VenueAI — Smart Stadium Experience</title>
-  <link rel="canonical" href="https://venueai-stadium.vercel.app/">
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SportsActivityLocation",
-    "name": "VenueAI Smart Stadium",
-    "description": "Next-gen smart stadium experience with AI-powered navigation, and digital food ordering.",
-    "url": "https://venueai-stadium.vercel.app/",
-    "potentialAction": {
-      "@type": "OrderAction",
-      "target": {
-        "@type": "EntryPoint",
-        "urlTemplate": "https://venueai-stadium.vercel.app/",
-        "actionPlatform": ["http://schema.org/DesktopWebPlatform", "http://schema.org/MobileWebPlatform"]
-      }
-    }
-  }
-  </script>
-  <!-- 🛡️ Logic Sanitization: Purge old service worker caches (Req: Fix persistent appId error) -->
+  
+  <!-- 🛡️ Alert Interceptor -->
   <script>
-    // 🛡️ logic sanitization: purge legacy caches
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
-    }
-    
-    // 🛡️ Alert Interceptor (Req: Permanently Kill the 'Auth Service Alert' pop-up)
     const _baseAlert = window.alert;
     window.alert = function(m) {
-      const msg = String(m).toLowerCase();
-      if (msg.includes('firebase') || msg.includes('appid') || msg.includes('installations') || msg.includes('auth service')) {
-        console.warn("🚨 [SHIELDED] Suppressed Legacy Alert:", m);
+      if (String(m).toLowerCase().includes('firebase') || String(m).toLowerCase().includes('appid')) {
+        console.warn("🛡️ Suppressed Alert:", m);
         return false;
       }
       return _baseAlert(m);
     };
-
-    window.onerror = (m) => { console.warn("App Handshake sync...", m); return true; }; 
-    console.log("🛠️ App Shield: High-Fidelity Clean State Enforced");
   </script>
-  
-  <!-- 🌐 Official Google Services Integrations -->
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=DEMO_KEY&libraries=places"></script>
+
+  <!-- 🌐 Official Integrations -->
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWpLY5RCECUpAdBalGwkPp0Kut3jf9c0s&libraries=places"></script>
   <script async defer src="https://accounts.google.com/gsi/client"></script>
-  
-  <!-- 🛠️ VenueAI Real-Time Engine (Firebase Module) -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <!-- 🛠️ VenueAI Firebase Module -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-    import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js";
     import { getInstallations } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-installations.js";
     
-    // 1. ATOMIC MANIFEST (Verified Production Identity)
-    const firebaseConfig = { 
+    const config = { 
        apiKey: "AIzaSyBWpLY5RCECUpAdBalGwkPp0Kut3jf9c0s", 
        authDomain: "venueai-production.firebaseapp.com",
        projectId: "venueai-production",
        databaseURL: "https://venueai-production-default-rtdb.firebaseio.com",
        storageBucket: "venueai-production.appspot.com",
        messagingSenderId: "1058503965829",
-       appId: "1:1058503965829:web:93294c1a13a070213dfdec",
-       measurementId: "G-VENUEAI2026"
+       appId: "1:1058503965829:web:93294c1a13a070213dfdec"
     };
 
-    const app = initializeApp(firebaseConfig);
-    if (app && app.options) app.options.appId = firebaseConfig.appId;
-
+    const app = initializeApp(config);
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
 
-    // 2. INTERACTIVE LAYER (Ensures buttons work instantly)
-    console.log("🖱️ UI Integrity: Binding Listeners...");
-    
-    // Google Sign In
-    const googleBtn = document.getElementById('googleLoginBtn');
-    if (googleBtn) {
-      googleBtn.onclick = () => {
-        googleBtn.innerHTML = '⏳ Syncing...';
-        googleBtn.disabled = true;
-        signInWithPopup(auth, provider)
-          .then(() => { window.location.reload(); })
-          .catch(e => { 
-            console.error("Auth:", e); 
-            googleBtn.innerHTML = '❌ Retry Google'; googleBtn.disabled = false;
-            alert(`Auth Refused: ${e.code || e.message}`);
-          });
-      };
-    }
+    // Export Auth Actions to window
+    window.vLogout = () => {
+      signOut(auth).then(() => {
+        sessionStorage.clear();
+        localStorage.removeItem('venue_stadium_id');
+        location.reload();
+      });
+    };
 
-    // Email Sign In
+    window.googleLogin = () => {
+      const btn = document.getElementById('googleLoginBtn');
+      if(btn) { btn.innerHTML = '⏳ Syncing...'; btn.disabled = true; }
+      signInWithPopup(auth, provider).then(() => location.reload()).catch(e => {
+        alert(e.message);
+        if(btn) { btn.innerHTML = 'Log in with Google'; btn.disabled = false; }
+      });
+    };
+
     window.handleEmailLogin = () => {
-      const email = document.getElementById('authEmail')?.value;
-      const pass = document.getElementById('authPassword')?.value;
-      if (!email || !pass) return alert("Credentials required.");
-      const btn = document.getElementById('emailLoginBtn');
-      if (btn) btn.innerText = 'Verifying...';
-
-      signInWithEmailAndPassword(auth, email, pass)
-        .then(() => { window.location.reload(); })
-        .catch(e => {
-          if (btn) btn.innerText = 'Sign In';
-          alert(`Login Failed: ${e.message}`);
-        });
-    };
-    document.getElementById('emailLoginBtn')?.addEventListener('click', window.handleEmailLogin);
-
-    // Email/Password Sign Up
-    const signupBtn = document.getElementById('emailSignupBtn');
-    if (signupBtn) {
-      signupBtn.onclick = () => {
-        const email = document.getElementById('authEmail').value;
-        const pass = document.getElementById('authPassword').value;
-        if(!email || !pass) return alert("Please enter both email and password.");
-        signupBtn.innerText = 'Creating Room...';
-        createUserWithEmailAndPassword(auth, email, pass)
-          .then(() => { window.location.reload(); })
-          .catch(err => {
-            signupBtn.innerText = 'Create Account';
-            alert("Error: " + err.message);
-          });
-      };
-    }
-
-    // Toggle Mode
-    let isSignUp = false;
-    document.getElementById('toggleAuthMode')?.addEventListener('click', () => {
-      isSignUp = !isSignUp;
-      const title = document.getElementById('authTitle');
-      const loginBtn = document.getElementById('emailLoginBtn');
-      const signupBtn = document.getElementById('emailSignupBtn');
-      const toggle = document.getElementById('toggleAuthMode');
-      if(isSignUp) {
-        title.innerText = 'Join VenueAI World';
-        loginBtn.style.display = 'none';
-        signupBtn.style.display = 'block';
-        toggle.innerText = 'Already have an account? Sign In';
-      } else {
-        title.innerText = 'Welcome Back';
-        loginBtn.style.display = 'block';
-        signupBtn.style.display = 'none';
-        toggle.innerText = "Don't have an account? Sign Up";
-      }
-    });
-
-    // Forgot Password
-    document.getElementById('forgotPasswordBtn')?.addEventListener('click', () => {
-      const email = document.getElementById('authEmail').value;
-      if(!email) return alert("Please enter your email address.");
-      sendPasswordResetEmail(auth, email)
-        .then(() => alert("Reset link sent!"))
-        .catch(err => alert("Error: " + err.message));
-    });
-
-    // Tab Switching
-    let analytics;
-    window.setAuthTab = (mode) => {
-      const isSignup = mode === 'signup';
-      document.getElementById('emailLoginBtn').style.display = isSignup ? 'none' : 'block';
-      document.getElementById('emailSignupBtn').style.display = isSignup ? 'block' : 'none';
-      const tabIn = document.getElementById('tab-signin');
-      const tabUp = document.getElementById('tab-signup');
-      tabIn.style.background = isSignup ? 'transparent' : 'rgba(255,255,255,0.1)';
-      tabIn.style.color = isSignup ? 'var(--text-muted)' : '#fff';
-      tabUp.style.background = isSignup ? 'rgba(255,255,255,0.1)' : 'transparent';
-      tabUp.style.color = isSignup ? '#fff' : 'var(--text-muted)';
-      if (analytics) logEvent(analytics, 'auth_tab_change', { mode });
+      const e = document.getElementById('authEmail').value;
+      const p = document.getElementById('authPassword').value;
+      signInWithEmailAndPassword(auth, e, p).then(() => location.reload()).catch(err => alert(err.message));
     };
 
-    // 3. TELEMETRY LAYER (Delayed to prevent boot collision)
-    setTimeout(() => {
-      try {
-        getInstallations(app);
-        analytics = getAnalytics(app);
-        window.vAnalytics = analytics;
-        console.log("📊 Telemetry Synced.");
-      } catch(e) { console.warn("Analytics Sync Delayed."); }
-    }, 1500);
-
-    // 4. SESSION GUARD
+    // Global Flow Guard
     onAuthStateChanged(auth, (user) => {
+      const authLayer = document.getElementById('authOverlay');
+      const selectionLayer = document.getElementById('stadiumSelectorOverlay');
+      const appLayer = document.getElementById('mainContent');
+
       if (user) {
         sessionStorage.setItem('venue_user', JSON.stringify({ name: user.displayName || 'Guest', email: user.email }));
-        const overlay = document.getElementById('authOverlay');
-        if (overlay) {
-          overlay.style.opacity = '0';
-          setTimeout(() => {
-            overlay.style.display = 'none';
-            document.getElementById('stadiumSelectorOverlay').style.display = 'flex';
-            if (window.loadStadiums) window.loadStadiums();
-          }, 400);
+        authLayer.style.display = 'none';
+        
+        const sid = localStorage.getItem('venue_stadium_id');
+        if (sid) {
+          selectionLayer.style.display = 'none';
+          appLayer.style.display = 'block';
+          if (window.enterStadium) window.enterStadium(sid);
+        } else {
+          selectionLayer.style.display = 'flex';
+          appLayer.style.display = 'none';
+          if (window.loadStadiums) window.loadStadiums();
         }
+      } else {
+        authLayer.style.display = 'flex';
+        selectionLayer.style.display = 'none';
+        appLayer.style.display = 'none';
       }
     });
+
+    // Lazy load analytics
+    setTimeout(() => { try { getInstallations(app); getAnalytics(app); } catch(e){} }, 2000);
   </script>
 
-  <!-- Fonts -->
+  <!-- Styles -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/attendee.css?v=2.2">
+  <link rel="stylesheet" href="/css/attendee.css?v=2.3">
 </head>
 <body>
 
-<div id="app" role="application">
-  <!-- AUTH OVERLAY (Premium Dark Mode) -->
+<div id="app">
+  <!-- 1. AUTH LAYER -->
   <div id="authOverlay" class="glass-overlay">
     <div class="auth-card">
-      <h2 id="authTitle">Welcome to VenueAI</h2>
+      <div class="auth-logo">🏟️ VenueAI</div>
+      <h2 id="authTitle">Smart Stadium Entry</h2>
       
-      <div class="auth-tabs">
-        <button id="tab-signin" onclick="setAuthTab('signin')">Sign In</button>
-        <button id="tab-signup" onclick="setAuthTab('signup')">Sign Up</button>
-      </div>
-
       <div class="auth-form">
-        <button id="googleLoginBtn" class="google-btn">
-          <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="">
+        <button id="googleLoginBtn" class="google-btn" onclick="googleLogin()">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="">
           Log in with Google
         </button>
-
-        <div class="divider">OR EMAIL</div>
-
+        <div class="divider">OR SECURE LOGIN</div>
         <input type="email" id="authEmail" placeholder="Email Address">
         <input type="password" id="authPassword" placeholder="Password">
-        
-        <button id="emailLoginBtn" class="action-btn primary">Sign In</button>
-        <button id="emailSignupBtn" class="action-btn primary" style="display:none">Create Account</button>
-        
-        <div class="auth-footer">
-          <span id="toggleAuthMode" style="cursor:pointer">Don't have an account? Sign Up</span>
-          <span id="forgotPasswordBtn" style="cursor:pointer; color:var(--text-muted); float:right">Forgot Password?</span>
-        </div>
+        <button class="action-btn primary" onclick="handleEmailLogin()">Enter Ground</button>
       </div>
     </div>
   </div>
 
-  <!-- STADIUM SELECTOR -->
+  <!-- 2. STADIUM SELECTOR -->
   <div id="stadiumSelectorOverlay" class="glass-overlay" style="display:none">
     <div class="selection-card">
-      <h2>Enter Stadium</h2>
+      <h2>Enter Your Stadium</h2>
+      <p class="subtitle">Select your venue to sync real-time experience</p>
       <div id="stadiumGrid" class="stadium-grid">
-        <!-- Dyn Load -->
+        <div class="loading">Finding venues...</div>
       </div>
     </div>
   </div>
 
-  <!-- MAIN NAVIGATION -->
+  <!-- 3. MAIN APP -->
   <main id="mainContent" class="app-container" style="display:none">
-    <!-- Top Bar -->
     <header class="top-nav">
-      <div class="user-info">
-        <span class="user-name" id="userNameDisplay">Stadium Guest</span>
-        <span class="seat-info" id="userSeatDisplay">General Admission</span>
+      <div class="user-info" onclick="vLogout()" title="Click to Logout">
+        <span class="user-name" id="userNameDisplay">Guest</span>
+        <span class="user-status">🟢 Verified</span>
       </div>
       <div class="stadium-name-badge" id="currentStadiumName">VenueAI Stadium</div>
     </header>
 
-    <!-- Content Sections -->
-    <section id="venueTab" class="tab-content active">
+    <!-- CONTENT TABS -->
+    <section id="tab-venue" class="tab-panel active">
       <div class="live-match-card">
         <div class="match-teams">
-          <div class="team home"><span id="homeName">HOME</span><div class="score" id="homeScore">0</div></div>
+          <div class="team"><span id="homeName">HOME</span><div class="score" id="homeScore">0</div></div>
           <div class="vs">VS</div>
-          <div class="team away"><span id="awayName">AWAY</span><div class="score" id="awayScore">0</div></div>
+          <div class="team"><span id="awayName">AWAY</span><div class="score" id="awayScore">0</div></div>
         </div>
         <div class="match-meta">
-          <span id="matchStatus">READY TO PLAY</span>
-          <span id="matchClock">00'</span>
+          <span id="matchStatus">READY</span> · <span id="matchClock">00'</span>
         </div>
       </div>
-      
-      <div class="reality-sync-banner">
-        <span class="pulse-icon"></span>
-        <span id="realityStatus">AI Reality Engine: Synchronized</span>
-      </div>
 
+      <div class="section-title">Book Entry Slot</div>
+      <div id="slotsGrid" class="slots-grid">
+        <!-- Dyn Load -->
+      </div>
+      
       <div class="stadium-map-container">
-         <div id="stadiumMap" class="map-view"></div>
-         <div class="map-overlay">
-           <button class="map-tool" onclick="focusUser()">📍</button>
-           <button class="map-tool" onclick="toggleMapLayers()">🛡️</button>
-         </div>
+         <div id="stadiumMap"></div>
       </div>
     </section>
 
-    <!-- Bottom App Bar -->
+    <section id="tab-food" class="tab-panel" hidden>
+      <div class="section-title">Digital Food Court</div>
+      <div id="menuGrid" class="menu-grid"></div>
+    </section>
+
+    <section id="tab-nav" class="tab-panel" hidden>
+      <div class="section-title">AI Wayfinding</div>
+      <div class="nav-interface">
+        <select id="navDestination">
+           <option value="seat">My Seat</option>
+           <option value="gate">Nearest Gate</option>
+           <option value="food">Food Court</option>
+        </select>
+        <button class="action-btn primary" onclick="getRoute()">Find Route</button>
+      </div>
+    </section>
+
+    <section id="tab-orders" class="tab-panel" hidden>
+      <div class="section-title">My Orders</div>
+      <div id="orderList" class="order-list"></div>
+    </section>
+
+    <!-- BOTTOM BAR -->
     <nav class="bottom-bar">
-      <button class="nav-item active" onclick="switchTab('venue')">🏟️<span>Venue</span></button>
-      <button class="nav-item" onclick="switchTab('food')">🍔<span>Food</span></button>
-      <button class="nav-item" onclick="switchTab('navigation')">↗️<span>Nav</span></button>
-      <button class="nav-item" onclick="switchTab('orders')">📦<span>Orders</span></button>
+      <button class="nav-item active" data-tab="venue" onclick="switchTab('venue')">🏟️<span>Venue</span></button>
+      <button class="nav-item" data-tab="food" onclick="switchTab('food')">🍔<span>Food</span></button>
+      <button class="nav-item" data-tab="nav" onclick="switchTab('nav')">↗️<span>Nav</span></button>
+      <button class="nav-item" data-tab="orders" onclick="switchTab('orders')">📦<span>Orders</span></button>
     </nav>
   </main>
 </div>
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script src="/js/attendee.js?v=2.2"></script>
+<script src="/js/attendee.js?v=2.3"></script>
 
 </body>
 </html>

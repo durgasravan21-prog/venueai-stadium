@@ -500,6 +500,124 @@ toast-container { position:fixed; bottom:80px; left:50%; transform:translateX(-5
   text-transform: uppercase;
 }
 
+
+/* ── ENTRY SLOTS (Book Ticket) ──────────────────────────── */
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 1.5rem 0;
+}
+
+.slot-card {
+  background: var(--surface-light);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.slot-card:hover {
+  border-color: var(--amber);
+  background: rgba(245,158,11,0.1);
+  transform: translateY(-2px);
+}
+
+.slot-card .time { font-weight: 800; font-size: 1.1rem; color: var(--leather-cream); }
+.slot-card .label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; }
+
+/* ── BOTTOM NAV BAR ─────────────────────────────────────── */
+.bottom-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 80px;
+  background: rgba(45,26,14,0.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding-bottom: 20px;
+  z-index: 8000;
+}
+
+.nav-item {
+  background: none; border: none;
+  display: flex; flex-direction: column;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: var(--transition);
+  padding: 8px;
+}
+
+.nav-item span { font-size: 0.7rem; margin-top: 4px; font-weight: 700; }
+.nav-item.active { color: var(--leather-tan); }
+.nav-item.active span { color: var(--amber); }
+
+/* ── FOOD & MENU ────────────────────────────────────────── */
+.menu-grid {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: 1rem;
+}
+
+.menu-card {
+  display: flex; align-items: center;
+  background: var(--surface-light);
+  border-radius: 16px; padding: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.menu-thumb {
+  font-size: 2rem; width: 60px; height: 60px;
+  background: rgba(255,255,255,0.05);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px; margin-right: 16px;
+}
+
+.menu-details { flex: 1; }
+.menu-details h5 { margin: 0; font-size: 1rem; }
+.menu-details .price { color: var(--amber); font-weight: 800; }
+
+.add-btn {
+  background: var(--gold-gradient);
+  border: none; border-radius: 50%;
+  width: 32px; height: 32px;
+  font-weight: 900; cursor: pointer;
+  box-shadow: var(--shadow-bevel);
+}
+
+/* ── ORDERS ─────────────────────────────────────────────── */
+.order-list { display: flex; flex-direction: column; gap: 12px; }
+.order-card {
+  display: flex; align-items: center;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--border-color);
+  padding: 12px; border-radius: 12px;
+}
+.order-icon { font-size: 1.5rem; margin-right: 12px; }
+.order-info h5 { margin: 0; }
+.order-info span { font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── MISC UI ────────────────────────────────────────────── */
+.stadium-map-container {
+  margin-top: 1.5rem;
+  height: 200px; border-radius: 20px;
+  background: #333; overflow: hidden;
+  border: 4px solid var(--surface-light);
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+}
+#stadiumMap { height: 100%; width: 100%; }
+
+.section-title {
+  margin-top: 2rem; font-weight: 900; font-size: 1.2rem;
+  color: var(--leather-tan); text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
 /* ── AUTH UI: Glassmorphism & Skeuomorphic Hybrid ──────────────── */
 .glass-overlay {
   position: fixed; inset: 0; z-index: 9000;
